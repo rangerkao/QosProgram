@@ -1,0 +1,15 @@
+2014-11-27 10:10:10,486 [ INFO] (QosBatch.java:66) - Logger Load Success!
+2014-11-27 10:10:10,488 [ INFO] (QosBatch.java:114) - Connrct to jdbc:oracle:thin:@10.42.1.101:1521:S2TBSDEV  
+2014-11-27 10:10:31,776 [ERROR] (QosBatch.java:91) - Error at connDB : IO ²§±`: The Network Adapter could not establish the connection
+2014-11-27 10:10:31,777 [ERROR] (QosBatch.java:468) - connction is null!
+2014-11-27 10:10:31,785 [ INFO] (QosBatch.java:134) - Close connection...
+2014-11-27 10:10:36,751 [ INFO] (QosBatch.java:66) - Logger Load Success!
+2014-11-27 10:10:36,753 [ INFO] (QosBatch.java:114) - Connrct to jdbc:oracle:thin:@10.42.1.101:1521:S2TBSDEV  
+2014-11-27 10:10:57,813 [ERROR] (QosBatch.java:91) - Error at connDB : IO ²§±`: The Network Adapter could not establish the connection
+2014-11-27 10:10:57,814 [ERROR] (QosBatch.java:468) - connction is null!
+2014-11-27 10:10:57,815 [ INFO] (QosBatch.java:134) - Close connection...
+2014-11-27 12:14:12,717 [ INFO] (QosBatch.java:66) - Logger Load Success!
+2014-11-27 12:14:12,719 [ INFO] (QosBatch.java:114) - Connrct to jdbc:oracle:thin:@10.42.1.101:1521:S2TBSDEV  
+2014-11-27 12:14:33,919 [ERROR] (QosBatch.java:91) - Error at connDB : IO ²§±`: The Network Adapter could not establish the connection
+2014-11-27 12:14:33,920 [ERROR] (QosBatch.java:468) - connction is null!
+2014-11-27 12:14:33,928 [ INFO] (QosBatch.java:134) - Close connection...
