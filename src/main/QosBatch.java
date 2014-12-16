@@ -1,5 +1,6 @@
 package main;
 import java.io.BufferedReader;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -386,8 +387,8 @@ public class QosBatch implements Runnable{
 			logger.info("Posted :"+url+"?"+param+"   \nresult:"+result);
 			
 			sql=
-					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RETURN_CODE,CERATE_TIME) "
-					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"',SYSDATE)";
+					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
+					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE)";
 
 			logger.debug("Excute Sql : "+sql);
 			
@@ -423,8 +424,9 @@ public class QosBatch implements Runnable{
 		
 	}
 	
-	
+	static String resultCode;
 	public static String HttpPost(String url,String param,String charset) throws IOException{
+		resultCode="";
 		URL obj = new URL(url);
 		
 		if(charset!=null && !"".equals(charset))
@@ -450,6 +452,17 @@ public class QosBatch implements Runnable{
 		System.out.println("Post parameters : " + param);
 		System.out.println("Response Code : " + responseCode);*/
  
+		BufferedReader reader = new BufferedReader(new InputStreamReader(con.getInputStream()));
+		 String line;
+		 String TAB = "\r";
+	    StringBuffer response = new StringBuffer();
+	      
+	    while((line = reader.readLine()) != null) {  
+	         response.append(line);
+	         response.append(TAB);
+	    }
+	    reader.close();
+	    resultCode=response.toString();
 	
 		return String.valueOf(responseCode);
 	}
@@ -592,7 +605,7 @@ public class QosBatch implements Runnable{
 	}
 	private void addedQosA(){
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI ,B.PRICEPLANID "
+				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND A.S2TMSISDN=B.SERVICECODE "
@@ -603,7 +616,7 @@ public class QosBatch implements Runnable{
 
 		try {
 			Statement st = conn.createStatement();
-			logger.info("Search added : "+sql);
+			logger.info("Search added A : "+sql);
 			ResultSet rs = st.executeQuery(sql);
 			while(rs.next()){
 				MSISDN=rs.getString("MSISDN");
@@ -639,7 +652,7 @@ public class QosBatch implements Runnable{
 	
 	private void addedQosD(){
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI ,B.PRICEPLANID "
+				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND A.S2TMSISDN=B.SERVICECODE "
@@ -650,7 +663,7 @@ public class QosBatch implements Runnable{
 
 		try {
 			Statement st = conn.createStatement();
-			logger.info("Search added : "+sql);
+			logger.info("Search added D : "+sql);
 			ResultSet rs = st.executeQuery(sql);
 			while(rs.next()){
 				MSISDN=rs.getString("MSISDN");
