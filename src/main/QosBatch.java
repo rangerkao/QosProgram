@@ -1,6 +1,5 @@
 package main;
 import java.io.BufferedReader;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -11,7 +10,6 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -20,6 +18,8 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Properties;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -35,15 +35,16 @@ import javax.mail.internet.MimeMultipart;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-public class QosBatch implements Runnable{
+
+public class QosBatch extends  TimerTask implements Runnable {
 
 	Connection conn = null,conn2=null;
 	//static int runInterval = 1000*60*10; //10min
 	static int period_Time=10;//min
-	Properties props =new Properties();
-	Logger logger =null;
+	static Properties props =new Properties();
+	static Logger logger =null;
 	
-	String IP="203.142.105.18"; 
+	static String IP="203.142.105.18"; 
 	String VERSION="1";
 	String MSISDN="66407851";
 	String IMSI="454120260232504";
@@ -62,14 +63,14 @@ public class QosBatch implements Runnable{
 	private String mailContent;
 	private String mailSender;
 	private String errorMsg;
-	private long waitTime=7;
-	
+	private static long waitTime=7;
+	//private static ExecutorService execService;
 	static int tCount=0;
 	
 	
 	
 	
-	private  void loadProperties(){
+	private static  void loadProperties(){
 		System.out.println("initial Log4j, property !");
 		String path=QosBatch.class.getResource("").toString().replaceAll("file:", "")+"Log4j.properties";
 		System.out.println("path : "+path);
@@ -88,21 +89,18 @@ public class QosBatch implements Runnable{
 			String p=props.getProperty("program.QosPeriod");
 			if(p!=null && !"".equals(p) && p.matches("^\\d+$"))
 				period_Time=Integer.parseInt(p);
-			logger.info("Set period time"+p);
+			logger.info("Set period time "+p);
 			
 			String w=props.getProperty("program.waitTime");
 			if(w!=null && !"".equals(w) && w.matches("^\\d+$"))
 				waitTime=Integer.parseInt(w);
-			logger.info("Set wait time"+w);
+			logger.info("Set wait time "+w);
 
 		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-			System.out.println("File Not Found : "+e.getMessage());
-			System.out.println("File Path : "+path);
-	
+			logger.error("Got FileNotFoundException,File Path : "+path,e);
 		} catch (IOException e) {
 			e.printStackTrace();
-			System.out.println("IOException : "+e.getMessage());
+			logger.info("Got IOException ",e);
 		}
 		
 	}
@@ -486,7 +484,9 @@ public class QosBatch implements Runnable{
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
 				if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-					PLAN="1";
+					//20150409 mod
+					//PLAN="1";
+					PLAN="3";
 				}else{
 					PLAN="2";
 				}
@@ -501,11 +501,10 @@ public class QosBatch implements Runnable{
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.equals("At Add new occure Exception : "+e.getMessage());
+			logger.error("Got SQLException",e);
 			//sendMail
-			sendMail("At Add new occure Exception");
 			errorMsg=e.getMessage();
+			sendMail("At Add new occure Exception");
 		}
 	}
 	
@@ -530,7 +529,9 @@ public class QosBatch implements Runnable{
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
 				if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-					PLAN="1";
+					//20150409
+					//PLAN="1";
+					PLAN="3";
 				}else{
 					PLAN="2";
 				}
@@ -545,14 +546,14 @@ public class QosBatch implements Runnable{
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.equals("At Cancel Qos occure Exception : "+e.getMessage());
+			logger.error("Got SQLException",e);
 			//sendMail
-			sendMail("At Cancel new occure Exception");
 			errorMsg=e.getMessage();
+			sendMail("At Cancel new occure Exception");
 		}
 	}
 	private void changeQos(){
+		logger.error("Excute change Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID "
 				+ "FROM PHONENUMBERCHANGEORDER A, SERVICEORDER B, IMSI C,SERVICE D "
@@ -596,14 +597,14 @@ public class QosBatch implements Runnable{
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.equals("At Change Qos occure Exception : "+e.getMessage());
+			logger.error("Got SQLException",e);
 			//sendMail
-			sendMail("At Change new occure Exception");
 			errorMsg=e.getMessage();
+			sendMail("At Change new occure Exception");
 		}
 	}
 	private void addedQosA(){
+		logger.error("Excute added A Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
@@ -628,11 +629,17 @@ public class QosBatch implements Runnable{
 					//Delete old
 					PLAN="2";
 					ACTION="D";
+					
 					excutePost();
 					
 					//Add new
-					PLAN="1";
+					//PLAN="1";
+					//ACTION="A";
+					
+					//20150409 mod
+					PLAN="4";
 					ACTION="A";
+
 					excutePost();
 				}else{
 					logger.error(" Because of MSISDN  or IMSI is null  , Can't added  Qos .");
@@ -642,15 +649,15 @@ public class QosBatch implements Runnable{
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.equals("At added A Qos occure Exception : "+e.getMessage());
+			logger.error("SQLException",e);
 			//sendMail
-			sendMail("At added Qos A occure Exception");
 			errorMsg=e.getMessage();
+			sendMail("At added Qos A occure Exception");
 		}
 	}
 	
 	private void addedQosD(){
+		logger.error("Excute added D Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
@@ -673,8 +680,13 @@ public class QosBatch implements Runnable{
 				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
 					
 					//Delete old
-					PLAN="1";
+					//PLAN="1";
+					//ACTION="D";
+					
+					//20150409 mod
+					PLAN="4";
 					ACTION="D";
+					
 					excutePost();
 					
 					//Add new
@@ -689,11 +701,10 @@ public class QosBatch implements Runnable{
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.equals("At added D Qos occure Exception : "+e.getMessage());
+			logger.error("Got SQLException",e);
 			//sendMail
-			sendMail("At added D Qos occure Exception");
 			errorMsg=e.getMessage();
+			sendMail("At added D Qos occure Exception");
 		}
 	}
 	
@@ -701,8 +712,7 @@ public class QosBatch implements Runnable{
 		
 		long startTime;
 		long endTime;
-				
-		loadProperties();
+		
 		connectDB();
 		
 		if(conn!=null){
@@ -739,34 +749,17 @@ public class QosBatch implements Runnable{
 	
 	public static void main(String[] args){
 		
-		if(args.length>0 && args[0].matches("^\\d+$")){
+		/*if(args.length>0 && args[0].matches("^\\d+$")){
 			period_Time=Integer.parseInt(args[0]);
-		}
+			System.out.println("Has insert parameter time "+period_Time);
+		}*/
 		
-		regularTimeRun();
-		/*QosBatch q = new QosBatch();
-		q.proccess();*/
-	}
+		loadProperties();
 		
-	public static void regularTimeRun(){
-		long s1=0;
-		long s2=System.currentTimeMillis();
-		while(true){
-			s2=System.currentTimeMillis();
-			if((s2-s1)>period_Time*60*1000){
-				s1=System.currentTimeMillis();
-				QosBatch q = new QosBatch();
-				Thread t = new Thread(q, "thread"+(tCount++));
-				t.start();
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-		}		
-		
+		//regularTimeRun();		
+		//20150420 測試新用法 timer 與 timerTask
+		Timer timer =new Timer();
+		timer.schedule(new QosBatch(),0, period_Time*60*1000);
 	}
 
 	public void run() {
