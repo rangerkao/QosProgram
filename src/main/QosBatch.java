@@ -1,3 +1,9 @@
+
+/**
+ * 2014/12/15開始運作
+ *
+ */
+
 package main;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -112,16 +118,16 @@ public class QosBatch extends  TimerTask implements Runnable {
 			connect2();
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
-			logger.error("Error at connDB : "+e.getMessage());
+			logger.error("Error at connDB",e);
 			//sendMail
-			sendMail("Error at connDB");
 			errorMsg=e.getMessage();
+			sendMail("Error at connDB");
 		} catch (SQLException e) {
 			e.printStackTrace();
-			logger.error("Error at connDB : "+e.getMessage());
+			logger.error("Error at connDB",e);
 			//sendMail
-			sendMail("Error at connDB");
 			errorMsg=e.getMessage();
+			sendMail("Error at connDB");
 		}
 	}
 	
