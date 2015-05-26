@@ -6,8 +6,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.channels.ClosedByInterruptException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -316,7 +318,34 @@ public class QosProgram {
 		return String.valueOf(responseCode);
 	}
 	
-	private static void sendMail(String content){
+	//20150526 mod
+		//mail host server had ended
+		//change send from local machine, solaris not use mail conmand, is use mailx,and final location end by dot. 
+		private static void sendMail(String msg){
+			String ip ="";
+			try {
+				ip = InetAddress.getLocalHost().getHostAddress();
+			} catch (UnknownHostException e1) {
+				e1.printStackTrace();
+			}
+			
+			msg=msg+" from location "+ip;			
+			
+			String [] cmd=new String[3];
+			cmd[0]="/bin/bash";
+			cmd[1]="-c";
+			cmd[2]= "/bin/echo \""+msg+"\" | /bin/mailx -s \"Qos System alert\" "+props.getProperty("mail.Receiver") ;
+
+			try{
+				Process p = Runtime.getRuntime().exec (cmd);
+				p.waitFor();
+				System.out.println("send mail cmd:"+cmd);
+			}catch (Exception e){
+				System.out.println("send mail fail:"+msg);
+			}
+		}
+	
+	/*private static void sendMail(String content){
 		
 		DateFormat df = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 		mailReceiver=props.getProperty("mail.Receiver");
@@ -445,7 +474,7 @@ public class QosProgram {
 										"Subject : "+msg.getSubject()+"\n<br>"+
 										"Content : "+msg.getContent()+"\n<br>"+
 										"SendDate: "+msg.getSentDate());			
-	}
+	}*/
 	
 	 private  static String excutePost(String VERSION,String MSISDN,String IMSI,String dayTime,String VENDOR,String ACTION,String PLAN){
 		String url=	"http://"+IP+"/mvno_api/MVNO_UPDATE_QOS";
