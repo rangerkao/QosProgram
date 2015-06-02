@@ -11,6 +11,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
@@ -63,6 +65,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	
 	Date preTime; //last excute time
 	Date nowTime; //now 
+	static Date lastTime=null;
 	String preTimeS; //last excute time
 	String nowTimeS; //now 
 	String sql="";
@@ -71,7 +74,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	private String mailContent;
 	private String mailSender;
 	private String errorMsg;
-	private static long waitTime=7;
+	private static long waitTime=8;
 	//private static ExecutorService execService;
 	static int tCount=0;
 	
@@ -119,17 +122,19 @@ public class QosBatch extends  TimerTask implements Runnable {
 			connect1();
 			connect2();
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Error at connDB",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("Error at connDB");
+			sendMail("Error at connDB\n"+s);
 		} catch (SQLException e) {
-			e.printStackTrace();
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Error at connDB",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("Error at connDB");
+			sendMail("Error at connDB\n"+s);
 		}
 	}
 	
@@ -176,11 +181,13 @@ public class QosBatch extends  TimerTask implements Runnable {
 			try {
 				conn.close();
 			} catch (SQLException e) {
-				e.printStackTrace();
-				logger.debug("close Connect Error : "+e.getMessage());
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.debug("close Connect Error!",e);
 				//sendMail
-				sendMail("close Connect Error ");
-				errorMsg=e.getMessage();
+				sendMail("close Connect Error "+s);
+				
 			}
 		}		
 	}
@@ -191,13 +198,20 @@ public class QosBatch extends  TimerTask implements Runnable {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
 		
 		Calendar calendar = Calendar.getInstance();
+		calendar.setTime(nowTime);
 		
-		nowTime=calendar.getTime();
+
 		nowTimeS = sdf.format(nowTime);
 		
-		calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE)-period_Time);
 		
-		preTime=calendar.getTime();
+		if(lastTime==null){
+			calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE)-period_Time);
+			preTime=calendar.getTime();
+			
+		}else{
+			preTime=lastTime;
+		}
+		
 		preTimeS = sdf.format(preTime);
 		
 		logger.info("Proccess from "+preTime+" to "+nowTime);
@@ -256,8 +270,11 @@ public class QosBatch extends  TimerTask implements Runnable {
 		String ip ="";
 		try {
 			ip = InetAddress.getLocalHost().getHostAddress();
-		} catch (UnknownHostException e1) {
-			e1.printStackTrace();
+		} catch (UnknownHostException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error(e);
 		}
 		
 		msg=msg+" from location "+ip;			
@@ -432,23 +449,26 @@ public class QosBatch extends  TimerTask implements Runnable {
 			Thread.sleep(waitTime*1000);
 			
 		} catch (IOException e) {
-			e.printStackTrace();
-			logger.error("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception : ",e);
 			//sendMail
-			sendMail("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception");
-			errorMsg=e.getMessage();
+			sendMail("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception\n"+s);
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.error("Write Log to DB occured error! : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Write Log to DB occured error! : ",e);
 			//sendMail
-			sendMail("Write Log to DB occured error!");
-			errorMsg=e.getMessage();
+			sendMail("Write Log to DB occured error!\n"+s);
 		} catch (InterruptedException e) {
-			e.printStackTrace();
-			logger.error("Got InterruptedException ! : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got InterruptedException ! : ",e);
 			//sendMail
-			sendMail("Got InterruptedException !");
-			errorMsg=e.getMessage();
+			sendMail("Got InterruptedException !"+s);
 		}
 		
 		return result;
@@ -498,7 +518,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return String.valueOf(responseCode);
 	}
 	
-	private void addQos(){
+	private boolean addQos(){
 		logger.error("Excute add Qos...");
 		ACTION="A";
 		sql=
@@ -534,14 +554,18 @@ public class QosBatch extends  TimerTask implements Runnable {
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Got SQLException",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("At Add new occure Exception");
+			sendMail("At Add new occure Exception("+new Date()+") \n"+s);
+			return false;
 		}
+		return true;
 	}
 	
-	private void deleteQos(){
+	private boolean deleteQos(){
 		logger.error("Excute delete Qos...");
 		ACTION="D";
 		
@@ -579,13 +603,17 @@ public class QosBatch extends  TimerTask implements Runnable {
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Got SQLException",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("At Cancel new occure Exception");
+			sendMail("At Cancel occure Exception("+new Date()+") \n"+s);
+			return false;
 		}
+		return true;
 	}
-	private void changeQos(){
+	private boolean changeQos(){
 		logger.error("Excute change Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID "
@@ -630,13 +658,17 @@ public class QosBatch extends  TimerTask implements Runnable {
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Got SQLException",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("At Change new occure Exception");
+			sendMail("At Cahnge occure Exception("+new Date()+") \n"+s);
+			return false;
 		}
+		return true;
 	}
-	private void addedQosA(){
+	private boolean addedQosA(){
 		logger.error("Excute added A Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
@@ -682,14 +714,18 @@ public class QosBatch extends  TimerTask implements Runnable {
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("SQLException",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("At added Qos A occure Exception");
+			sendMail("At Add added occure Exception("+new Date()+") \n"+s);
+			return false;
 		}
+		return true;
 	}
 	
-	private void addedQosD(){
+	private boolean addedQosD(){
 		logger.error("Excute added D Qos...");
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
@@ -734,11 +770,15 @@ public class QosBatch extends  TimerTask implements Runnable {
 			st.close();
 			rs.close();
 		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
 			logger.error("Got SQLException",e);
 			//sendMail
-			errorMsg=e.getMessage();
-			sendMail("At added D Qos occure Exception");
+			sendMail("At Delete added occure Exception("+new Date()+") \n"+s);
+			return false;
 		}
+		return true;
 	}
 	
 	private void proccess(){
@@ -750,20 +790,14 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		if(conn!=null){
 			logger.info("connection success!");
-			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+new Date());
-			startTime = System.currentTimeMillis();
+			nowTime=new Date();
+			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
+			startTime = nowTime.getTime();
 			
 			setTime();
-			
-			addQos();
-			
-			deleteQos();
-			
-			changeQos();
-			
-			addedQosA();
-			
-			addedQosD();
+			if(addQos()&&deleteQos()&&changeQos()&&addedQosA()&&addedQosD()){
+				lastTime=nowTime;
+			}
 
 			// run end
 			endTime = System.currentTimeMillis();

@@ -5,6 +5,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
@@ -86,7 +88,6 @@ public class QosProgram {
 		} catch (FileNotFoundException e) {
 			logger.error("Got FileNotFoundException,File Path : "+path,e);
 		} catch (IOException e) {
-			e.printStackTrace();
 			logger.info("Got IOException ",e);
 		}
 		
@@ -98,13 +99,12 @@ public class QosProgram {
 			connect1();
 			connect2();
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			
 			logger.error("Error at connDB",e);
 			//sendMail
 			errorMsg=e.getMessage();
 			sendMail("Error at connDB");
 		} catch (SQLException e) {
-			e.printStackTrace();
 			logger.error("Error at connDB",e);
 			//sendMail
 			errorMsg=e.getMessage();
@@ -155,11 +155,12 @@ public class QosProgram {
 			try {
 				conn.close();
 			} catch (SQLException e) {
-				e.printStackTrace();
-				logger.debug("close Connect Error : "+e.getMessage());
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.debug("close Connect Error : ",e);
 				//sendMail
-				sendMail("close Connect Error ");
-				errorMsg=e.getMessage();
+				sendMail("close Connect Error \n"+s);
 			}
 		}		
 	}
@@ -238,7 +239,6 @@ public class QosProgram {
 			// 指定讀取文件的編碼格式，以免出現中文亂碼
 
 			String str = null;
-			SimpleDateFormat sdf = new SimpleDateFormat("dd---yyyy.HH:mm:ss");
 
 			while ((str = reader.readLine()) != null) {
 				
@@ -325,8 +325,11 @@ public class QosProgram {
 			String ip ="";
 			try {
 				ip = InetAddress.getLocalHost().getHostAddress();
-			} catch (UnknownHostException e1) {
-				e1.printStackTrace();
+			} catch (UnknownHostException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error(e);
 			}
 			
 			msg=msg+" from location "+ip;			
@@ -500,23 +503,26 @@ public class QosProgram {
 			Thread.sleep(waitTime*1000);
 			
 		} catch (IOException e) {
-			e.printStackTrace();
-			logger.error("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception : ",e);
 			//sendMail
-			sendMail("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception");
-			errorMsg=e.getMessage();
+			sendMail("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception\n"+s);
 		} catch (SQLException e) {
-			e.printStackTrace();
-			logger.error("Write Log to DB occured error! : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Write Log to DB occured error! : ",e);
 			//sendMail
-			sendMail("Write Log to DB occured error!");
-			errorMsg=e.getMessage();
+			sendMail("Write Log to DB occured error!\n"+s);
 		} catch (InterruptedException e) {
-			e.printStackTrace();
-			logger.error("Got InterruptedException ! : "+e.getMessage());
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got InterruptedException ! : ",e);
 			//sendMail
-			sendMail("Got InterruptedException !");
-			errorMsg=e.getMessage();
+			sendMail("Got InterruptedException !\n"+s);
 		}
 		
 		return result;
