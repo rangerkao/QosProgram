@@ -337,7 +337,7 @@ public class QosProgram {
 			String [] cmd=new String[3];
 			cmd[0]="/bin/bash";
 			cmd[1]="-c";
-			cmd[2]= "/bin/echo \""+msg+"\" | /bin/mailx -s \"Qos System alert\" "+props.getProperty("mail.Receiver") ;
+			cmd[2]= "/bin/echo \""+msg+"\" | /bin/mailx -s \"Qos System alert\" -r Qos_PROGRAM_ALERT_MAIL "+props.getProperty("mail.Receiver")+"." ;
 
 			try{
 				Process p = Runtime.getRuntime().exec (cmd);
