@@ -536,7 +536,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 				IMSI=rs.getString("IMSI");
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
-				if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+				//20150702 cancel
+				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+				//因NTT 香港 160 不需限速，故拿掉
+				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					//20150409 mod
 					//PLAN="1";
 					PLAN="3";
@@ -584,8 +587,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 				MSISDN=rs.getString("MSISDN");
 				IMSI=rs.getString("IMSI");
 				String pricePlanId = rs.getString("PRICEPLANID");
-				
-				if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+				//20150702 cancel
+				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+				//因NTT 香港 160 不需限速，故拿掉
+				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					//20150409
 					//PLAN="1";
 					PLAN="3";
@@ -633,8 +638,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 				IMSI=rs.getString("IMSI");
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
-				if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-					PLAN="1";
+				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
+					PLAN="3";
 				}else{
 					PLAN="2";
 				}
@@ -671,7 +676,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	private boolean addedQosA(){
 		logger.error("Excute added A Qos...");
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
+				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID,A.ADDONCODE "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND A.S2TMSISDN=B.SERVICECODE "
@@ -687,6 +692,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 			while(rs.next()){
 				MSISDN=rs.getString("MSISDN");
 				IMSI=rs.getString("IMSI");
+				String ADDONCODE=rs.getString("ADDONCODE");
+				
 				//String pricePlanId = rs.getString("PRICEPLANID");
 				
 				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
@@ -697,12 +704,22 @@ public class QosBatch extends  TimerTask implements Runnable {
 					
 					excutePost();
 					
+					
+					
 					//Add new
 					//PLAN="1";
 					//ACTION="A";
 					
-					//20150409 mod
-					PLAN="4";
+					
+					if("SX001".equals(ADDONCODE)){
+						//20150409 mod
+						PLAN="3";
+						
+					}else if("SX002".equals(ADDONCODE)){
+						//20150702 add
+						PLAN="4";
+					}
+					
 					ACTION="A";
 
 					excutePost();
@@ -728,7 +745,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	private boolean addedQosD(){
 		logger.error("Excute added D Qos...");
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID "
+				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID,A.ADDONCODE "
 				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND A.S2TMSISDN=B.SERVICECODE "
@@ -744,6 +761,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			while(rs.next()){
 				MSISDN=rs.getString("MSISDN");
 				IMSI=rs.getString("IMSI");
+				String ADDONCODE=rs.getString("ADDONCODE");
 				//String pricePlanId = rs.getString("PRICEPLANID");
 				
 				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
@@ -751,9 +769,15 @@ public class QosBatch extends  TimerTask implements Runnable {
 					//Delete old
 					//PLAN="1";
 					//ACTION="D";
-					
-					//20150409 mod
-					PLAN="4";
+
+					if("SX001".equals(ADDONCODE)){
+						//20150409 mod
+						PLAN="3";
+						
+					}else if("SX002".equals(ADDONCODE)){
+						//20150702 add
+						PLAN="4";
+					}
 					ACTION="D";
 					
 					excutePost();
