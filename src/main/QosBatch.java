@@ -205,7 +205,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		
 		if(lastTime==null){
-			calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE)-period_Time);
+			//calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE)-period_Time);
+			calendar.set(Calendar.MONTH, 8);
+			calendar.set(Calendar.DAY_OF_MONTH, 2);
+			calendar.set(Calendar.HOUR_OF_DAY, 9);
+			calendar.set(Calendar.MINUTE, 11);
+			calendar.set(Calendar.SECOND, 28);
 			preTime=calendar.getTime();
 			
 		}else{
