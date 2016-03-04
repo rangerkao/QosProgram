@@ -15,6 +15,7 @@ import java.net.UnknownHostException;
 import java.nio.channels.ClosedByInterruptException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.DateFormat;
@@ -43,19 +44,12 @@ public class QosProgram {
 	static Connection conn = null;
 	static Connection conn2=null;
 	static String IP="203.142.105.18";
-	static String filename="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
 	static int waitTime=8000;
 	static int period_Time=10;//min
 	static Properties props =new Properties();
 	static Logger logger =null;
 	
 	private static String errorMsg;
-	private static String sql;
-	
-	private static String mailReceiver;
-	private static String mailSubject;
-	private static String mailContent;
-	private static String mailSender;
 	
 	static String resultCode;
 	
@@ -167,20 +161,82 @@ public class QosProgram {
 	
 	public static void main(String args[]) throws InterruptedException{
 		
+		
+		//args=new String[]{"454120260240500","85269477972"};
+		
+		
+		
 		if(args.length<1){
-			System.out.println("沒有檔案名稱");
+			System.out.println("lack parameter！");
 			return;
 		}
-		filename=args[0];
-		
 		
 		loadProperties();
-		
 		connectDB();
-		readtxt(filename);
+		int msisdnLength = 8;
+		int IMSILength = 15;
+		if(args.length>1&&!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=IMSILength &&
+				!"".equals(args[1])&&args[1].matches("^\\d+$")&&args[1].length()>=msisdnLength){
+			//純數字，Msisdn
+			logger.info("execute by imsi,msisdn...");
+			String msisdn = args[1].substring(args[1].length()-msisdnLength,args[1].length());
+			excuteByMsisdn(args[0],msisdn);
+			
+		}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
+			//.txt 檔案
+			logger.info("execute by file...");
+			String filename;
+			//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
+			filename=args[0];
+			readtxt(filename);
+			
+		}else{
+			System.out.print("can't resolve parameter!");
+			for(int i = 0 ;i<args.length;i++)
+				System.out.print(","+args[i]);
+			System.out.println();
+		}
 		closeConnect();
 		
+		
 	}
+	private static void excuteByMsisdn(String IMSI,String msisdn) {
+		logger.info("excuteByMsisdn..."+IMSI+","+msisdn);
+		
+		String sql = 
+				"SELECT CASE a.SERVICECODE WHEN 'SX001' THEN '3' WHEN 'SX002' THEN '4' ELSE '2' END PLAN "
+				+ "FROM ADDONSERVICE_N A "
+				+ "WHERE A.STARTDATE < SYSDATE AND (SYSDATE < A.ENDDATE OR A.ENDDATE IS NULL) "
+				+ "AND  A.S2TIMSI = '"+IMSI+"' AND A.S2TMSISDN like '%"+msisdn+"'";
+		
+		Statement st = null;
+		ResultSet rs = null;
+				
+		String plan = "2";
+		String action = "A";
+		try {
+			st = conn.createStatement();
+			logger.debug("Excute Sql : "+sql);
+			rs = st.executeQuery(sql);
+
+			while(rs.next()){
+				plan = rs.getString("PLAN");
+			}
+		} catch (SQLException e) {
+			logger.error("Got SQLException",e);
+		}finally{
+			try {
+				if(st != null)
+					st.close();
+				if(rs != null)
+					rs.close();
+			} catch (SQLException e) {
+			}
+		}
+
+		excutePost("1", msisdn, IMSI, setDayTime(), "S", action, plan);
+	}
+
 	//set run time
 		private static String setDayTime(){ 
 			SimpleDateFormat sdf = new SimpleDateFormat("dd---yyyy.HH:mm:ss");
@@ -231,9 +287,6 @@ public class QosProgram {
 	public static void readtxt(String filePath) throws InterruptedException {
 			
 		BufferedReader reader = null;
-		String url="";
-		String param="";
-		String result="";
 		try {
 			reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePath), "UTF-8")); 
 			// 指定讀取文件的編碼格式，以免出現中文亂碼
@@ -484,22 +537,21 @@ public class QosProgram {
 		String param="VERSION="+VERSION+"&MSISDN="+MSISDN+"&IMSI="+IMSI+"&DATE_TIME="+dayTime+"&VENDOR="+VENDOR+"&ACTION="+ACTION+"&PLAN="+PLAN+"";
 		String result=null;
 		
+		Statement st = null;
 		try {
 			result = HttpPost(url,param,"");
 			logger.info("Posted :"+url+"?"+param+"   \nresult:"+result);
 			
-			sql=
+			String sql=
 					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
 					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE)";
 
 			logger.debug("Excute Sql : "+sql);
 			
-			Statement st = conn.createStatement();
+			st = conn.createStatement();
 
 			st.executeUpdate(sql);
-			
-			if(st!=null) st.close();
-			
+
 			Thread.sleep(waitTime*1000);
 			
 		} catch (IOException e) {
@@ -523,6 +575,11 @@ public class QosProgram {
 			logger.error("Got InterruptedException ! : ",e);
 			//sendMail
 			sendMail("Got InterruptedException !\n"+s);
+		}finally{
+			try {
+				if(st!=null) st.close();
+			} catch (SQLException e) {
+			}
 		}
 		
 		return result;

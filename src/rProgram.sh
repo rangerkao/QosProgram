@@ -13,6 +13,6 @@ for file in $libDir;    do
     append $file 
 done 
 
-java -cp $temp main/QosProgram  Qosfile.txt
+java -cp $temp main/QosProgram $1 $2
 
 echo finished

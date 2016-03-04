@@ -23,24 +23,13 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.PasswordAuthentication;
-import javax.mail.Transport;
-import javax.mail.internet.AddressException;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
@@ -69,10 +58,6 @@ public class QosBatch extends  TimerTask implements Runnable {
 	String preTimeS; //last excute time
 	String nowTimeS; //now 
 	String sql="";
-	private String mailReceiver;
-	private String mailSubject;
-	private String mailContent;
-	private String mailSender;
 	private String errorMsg;
 	private static long waitTime=8;
 	//private static ExecutorService execService;
@@ -193,26 +178,23 @@ public class QosBatch extends  TimerTask implements Runnable {
 	}
 	
 	
-	private void setTime(){
+	private boolean setTime(){
 		
+		boolean result = true;
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
 		
-		Calendar calendar = Calendar.getInstance();
-		calendar.setTime(nowTime);
-		
-
 		nowTimeS = sdf.format(nowTime);
-		
-		
 		if(lastTime==null){
-			//calendar.set(Calendar.MINUTE, calendar.get(Calendar.MINUTE)-period_Time);
-			calendar.set(Calendar.MONTH, 8);
-			calendar.set(Calendar.DAY_OF_MONTH, 2);
-			calendar.set(Calendar.HOUR_OF_DAY, 9);
-			calendar.set(Calendar.MINUTE, 11);
-			calendar.set(Calendar.SECOND, 28);
-			preTime=calendar.getTime();
-			
+			try {
+				preTime=sdf.parse("20160304145225");
+			} catch (ParseException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				logger.debug("ParseException Error!",e);
+				//sendMail
+				sendMail("cParseException Error "+s);
+				result = false;
+			}
 		}else{
 			preTime=lastTime;
 		}
@@ -220,6 +202,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		preTimeS = sdf.format(preTime);
 		
 		logger.info("Proccess from "+preTime+" to "+nowTime);
+		return result;
 	}
 	
 	//set run time
@@ -459,7 +442,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			errorMsg=s.toString();
 			logger.error("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception : ",e);
 			//sendMail
-			sendMail("For "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception\n"+s);
+			sendMail("Please redo this data.\nFor "+url+"?"+param+"   \nresult:"+result+"  at post url occur exception\n"+s);
 		} catch (SQLException e) {
 			StringWriter s = new StringWriter();
 			e.printStackTrace(new PrintWriter(s));
@@ -819,12 +802,11 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		if(conn!=null){
 			logger.info("connection success!");
-			nowTime=new Date();
+			nowTime=new Date(new Date().getTime()-1*60*1000);
 			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
 			startTime = nowTime.getTime();
 			
-			setTime();
-			if(addQos()&&deleteQos()&&changeQos()&&addedQosA()&&addedQosD()){
+			if(setTime()&&addQos()&&deleteQos()&&changeQos()&&addedQosA()&&addedQosD()){
 				lastTime=nowTime;
 			}
 
