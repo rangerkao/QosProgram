@@ -159,69 +159,48 @@ public class QosProgram {
 		}		
 	}
 	
-	public static void main(String args[]) throws InterruptedException{
-		
-		
-		//args=new String[]{"454120260240500","85269477972"};
-		
-		
-		
-		if(args.length<1){
-			System.out.println("lack parameter！");
-			return;
-		}
-		
-		loadProperties();
-		connectDB();
-		int msisdnLength = 8;
-		int IMSILength = 15;
-		if(args.length>1&&!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=IMSILength &&
-				!"".equals(args[1])&&args[1].matches("^\\d+$")&&args[1].length()>=msisdnLength){
-			//純數字，Msisdn
-			logger.info("execute by imsi,msisdn...");
-			String msisdn = args[1].substring(args[1].length()-msisdnLength,args[1].length());
-			excuteByMsisdn(args[0],msisdn);
-			
-		}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
-			//.txt 檔案
-			logger.info("execute by file...");
-			String filename;
-			//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
-			filename=args[0];
-			readtxt(filename);
-			
-		}else{
-			System.out.print("can't resolve parameter!");
-			for(int i = 0 ;i<args.length;i++)
-				System.out.print(","+args[i]);
-			System.out.println();
-		}
-		closeConnect();
-		
-		
-	}
-	private static void excuteByMsisdn(String IMSI,String msisdn) {
-		logger.info("excuteByMsisdn..."+IMSI+","+msisdn);
-		
-		String sql = 
-				"SELECT CASE a.SERVICECODE WHEN 'SX001' THEN '3' WHEN 'SX002' THEN '4' ELSE '2' END PLAN "
-				+ "FROM ADDONSERVICE_N A "
-				+ "WHERE A.STARTDATE < SYSDATE AND (SYSDATE < A.ENDDATE OR A.ENDDATE IS NULL) "
-				+ "AND  A.S2TIMSI = '"+IMSI+"' AND A.S2TMSISDN like '%"+msisdn+"'";
+	
+	private static void excuteByMsisdn(String msisdn) {
+		logger.info("excuteByMsisdn..."+msisdn);
 		
 		Statement st = null;
 		ResultSet rs = null;
 				
 		String plan = "2";
 		String action = "A";
+		String IMSI = null;
 		try {
 			st = conn.createStatement();
-			logger.debug("Excute Sql : "+sql);
+			
+			String sql = "select IMSI from imsi A,service B where A.serviceid = B.serviceid and B.servicecode like '%"+msisdn+"'";
+			
+			logger.info("Execute sql:"+sql);
 			rs = st.executeQuery(sql);
+			
+			while(rs.next()){
+				IMSI = rs.getString("IMSI");
+			}
+			
+			if(IMSI==null){
+				logger.error("Can't find IMSI!");
+				return;
+			}
+			
+			rs.close();
+			
+			String sql2 = 
+					"SELECT CASE a.SERVICECODE WHEN 'SX001' THEN '3' WHEN 'SX002' THEN '4' ELSE '2' END PLAN "
+					+ "FROM ADDONSERVICE_N A "
+					+ "WHERE A.STARTDATE < SYSDATE AND (SYSDATE < A.ENDDATE OR A.ENDDATE IS NULL) "
+					+ "AND  A.S2TIMSI = '"+IMSI+"' AND A.S2TMSISDN like '%"+msisdn+"'";
+			
+			logger.debug("Excute Sql : "+sql2);
+			rs = st.executeQuery(sql2);
 
 			while(rs.next()){
 				plan = rs.getString("PLAN");
 			}
+
 		} catch (SQLException e) {
 			logger.error("Got SQLException",e);
 		}finally{
@@ -233,7 +212,7 @@ public class QosProgram {
 			} catch (SQLException e) {
 			}
 		}
-
+		
 		excutePost("1", msisdn, IMSI, setDayTime(), "S", action, plan);
 	}
 
@@ -585,5 +564,52 @@ public class QosProgram {
 		return result;
 		
 	}
+	 
+	 public static void main(String args[]) throws InterruptedException{
+			
+			
+			//args=new String[]{"85269477975"};
+			
+			
+			
+			if(args.length<1){
+				System.out.println("lack parameter！");
+				return;
+			}
+			
+			loadProperties();
+			connectDB();
+			int msisdnLength = 8;
+			int IMSILength = 15;
+			/*if(args.length>1&&!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=IMSILength &&
+					!"".equals(args[1])&&args[1].matches("^\\d+$")&&args[1].length()>=msisdnLength){
+				//純數字，Msisdn
+				logger.info("execute by imsi,msisdn...");
+				String msisdn = args[1].substring(args[1].length()-msisdnLength,args[1].length());
+				excuteByMsisdn(args[0],msisdn);*/
+			if(!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=msisdnLength){
+				//純數字，Msisdn
+				logger.info("execute by imsi,msisdn...");
+				String msisdn = args[0].substring(args[0].length()-msisdnLength,args[0].length());
+				excuteByMsisdn(msisdn);
+				
+			}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
+				//.txt 檔案
+				logger.info("execute by file...");
+				String filename;
+				//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
+				filename=args[0];
+				readtxt(filename);
+				
+			}else{
+				System.out.print("can't resolve parameter!");
+				for(int i = 0 ;i<args.length;i++)
+					System.out.print(","+args[i]);
+				System.out.println();
+			}
+			closeConnect();
+			
+			
+		}
 }
 
