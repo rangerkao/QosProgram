@@ -186,7 +186,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		nowTimeS = sdf.format(nowTime);
 		if(lastTime==null){
 			try {
-				preTime=sdf.parse("20160304145225");
+				preTime=sdf.parse("20160509093145");
 			} catch (ParseException e) {
 				StringWriter s = new StringWriter();
 				e.printStackTrace(new PrintWriter(s));
@@ -514,7 +514,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "FROM SERVICE A, IMSI B "
 				+ "WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
 				+ "AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"'";
+				+ "AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' ) ";
 		try {
 			Statement st = conn2.createStatement();
 			logger.info("Search add : "+sql);
@@ -565,7 +566,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "FROM SERVICE A, IMSI B, TERMINATIONORDER C "
 				+ "WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
 				+ "AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"'";
+				+ "AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' ) ";
 	
 		try {
 			Statement st = conn2.createStatement();
@@ -614,7 +616,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "WHERE A.PREVPHONENUMBER<>A.NEWPHONENUMBER "
 				+ "AND A.ORDERID=B.ORDERID AND B.SERVICEID=C.SERVICEID AND C.SERVICEID =D.SERVICEID "
 				+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' ";
+				+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.PREVPHONENUMBER like '8526640%' OR  A.PREVPHONENUMBER like '8525609%'  OR A.PREVPHONENUMBER like '8526947%' ) "
+				+ "AND (A.NEWPHONENUMBER like '8526640%' OR  A.NEWPHONENUMBER like '8525609%'  OR A.NEWPHONENUMBER like '8526947%' ) ";
 
 		try {
 			Statement st = conn2.createStatement();
@@ -671,7 +675,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND B.SERVICEID=C.SERVICEID AND A.S2TIMSI=C.IMSI "
 				+ "AND A.ADDONACTION='A' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"'";
+				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' )  ";
 
 		try {
 			Statement st = conn.createStatement();
@@ -740,7 +745,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND B.SERVICEID=C.SERVICEID AND A.S2TIMSI=C.IMSI "
 				+ "AND A.ADDONACTION='D' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"'";
+				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' )  ";
 
 		try {
 			Statement st = conn.createStatement();
@@ -797,6 +803,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		long startTime;
 		long endTime;
+		
+		conn=null;
 		
 		connectDB();
 		
