@@ -186,7 +186,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		nowTimeS = sdf.format(nowTime);
 		if(lastTime==null){
 			try {
-				preTime=sdf.parse("20160509093145");
+				preTime=sdf.parse("20160627141205");
 			} catch (ParseException e) {
 				StringWriter s = new StringWriter();
 				e.printStackTrace(new PrintWriter(s));
@@ -620,21 +620,42 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND (A.PREVPHONENUMBER like '8526640%' OR  A.PREVPHONENUMBER like '8525609%'  OR A.PREVPHONENUMBER like '8526947%' ) "
 				+ "AND (A.NEWPHONENUMBER like '8526640%' OR  A.NEWPHONENUMBER like '8525609%'  OR A.NEWPHONENUMBER like '8526947%' ) ";
 
+		
+		
 		try {
 			Statement st = conn2.createStatement();
+			Statement st2 = conn.createStatement();
 			logger.info("Search change : "+sql);
 			ResultSet rs = st.executeQuery(sql);
+			ResultSet rs2 = null;
+			
 			while(rs.next()){
 				String oMSISDN=rs.getString("OLD_MSISDN");
 				String nMSISDN=rs.getString("NEW_MSISDN");
 				IMSI=rs.getString("IMSI");
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
-				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
+				String sql2 = "select case A.ServiceCode when 'SX001' then '3' when 'SX002' then '4' else '2' end PLAN "
+						+ "from Addonservice_N A "
+						+ "where A.S2TMSISDN like '%"+oMSISDN+"' "
+						+ "and A.STATUS = 'A' "
+						+ "and A.ENDDATE is null";
+				
+				
+				logger.info("query PLAN : "+sql2);
+				rs2 = st2.executeQuery(sql2);
+				
+				PLAN = "2";
+				
+				while(rs2.next()){
+					PLAN = rs2.getString("PLAN");
+				}
+				
+				/*if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					PLAN="3";
 				}else{
 					PLAN="2";
-				}
+				}*/
 				
 				if(oMSISDN!=null && !"".equals(oMSISDN) && nMSISDN!=null && !"".equals(nMSISDN) && IMSI!=null && !"".equals(IMSI)){
 					
@@ -651,9 +672,15 @@ public class QosBatch extends  TimerTask implements Runnable {
 					logger.error(" Because of new MSISDN,old MSISDN  or IMSI is null  , Can't change Qos .");
 				}
 				
+				
 			}
 			st.close();
+			st2.close();
 			rs.close();
+			if(rs2!=null){
+				rs2.close();
+			}
+			
 		} catch (SQLException e) {
 			StringWriter s = new StringWriter();
 			e.printStackTrace(new PrintWriter(s));
