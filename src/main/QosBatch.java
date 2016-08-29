@@ -186,7 +186,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		nowTimeS = sdf.format(nowTime);
 		if(lastTime==null){
 			try {
-				preTime=sdf.parse("20160627141205");
+				preTime=sdf.parse("20160715162707");
 			} catch (ParseException e) {
 				StringWriter s = new StringWriter();
 				e.printStackTrace(new PrintWriter(s));
@@ -692,6 +692,74 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}
 		return true;
 	}
+	private boolean added(){
+		logger.error("Excute added Qos...");
+		
+		sql = 
+				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID,A.ADDONCODE,A.ADDONACTION,A.REQUESTDATETIME "
+				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
+				+ "WHERE A.ADDONCODE IN ('SX001','SX002') AND A.S2TMSISDN=B.SERVICECODE AND B.SERVICEID=C.SERVICEID AND A.S2TIMSI=C.IMSI "
+				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' ) "
+				+ "ORDER BY A.REQUESTDATETIME ASC ";
+
+		try {
+			Statement st = conn.createStatement();
+			logger.info("Search added: "+sql);
+			ResultSet rs = st.executeQuery(sql);
+			while(rs.next()){
+				MSISDN=rs.getString("MSISDN");
+				IMSI=rs.getString("IMSI");
+				String ADDONCODE = rs.getString("ADDONCODE");
+				String ADDONACTION = rs.getString("ADDONACTION");
+				//String pricePlanId = rs.getString("PRICEPLANID");
+				
+				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+					
+					if("A".equals(ADDONACTION)){
+						//Delete old
+						PLAN="2";
+						ACTION="D";
+						excutePost();
+						
+						//Add new
+						if("SX001".equals(ADDONCODE))PLAN="3";
+						if("SX002".equals(ADDONCODE))PLAN="4";					
+						ACTION="A";
+						excutePost();	
+					}else if("D".equals(ADDONACTION)){
+						//Delete old
+						if("SX001".equals(ADDONCODE))PLAN="3";
+						if("SX002".equals(ADDONCODE))PLAN="4";	
+						ACTION="D";
+						excutePost();
+						
+						//Add new
+						PLAN="2";
+						ACTION="A";
+						excutePost();
+					}
+				}else{
+					logger.error(" Because of MSISDN  or IMSI is null  , Can't added  Qos .");
+				}
+				
+			}
+			st.close();
+			rs.close();
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("SQLException",e);
+			//sendMail
+			sendMail("At Add added occure Exception("+new Date()+") \n"+s);
+			return false;
+		}
+		return true;
+	}
+	/*
+	
 	private boolean addedQosA(){
 		logger.error("Excute added A Qos...");
 		sql=
@@ -824,7 +892,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return false;
 		}
 		return true;
-	}
+	}*/
 	
 	private void proccess(){
 		
@@ -841,7 +909,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
 			startTime = nowTime.getTime();
 			
-			if(setTime()&&addQos()&&deleteQos()&&changeQos()&&addedQosA()&&addedQosD()){
+			if(setTime()&&deleteQos()&&addQos()&&changeQos()&&added()){
 				lastTime=nowTime;
 			}
 
