@@ -186,7 +186,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		nowTimeS = sdf.format(nowTime);
 		if(lastTime==null){
 			try {
-				preTime=sdf.parse("20160715162707");
+				preTime=sdf.parse("20160919110749");
 			} catch (ParseException e) {
 				StringWriter s = new StringWriter();
 				e.printStackTrace(new PrintWriter(s));
@@ -696,13 +696,13 @@ public class QosBatch extends  TimerTask implements Runnable {
 		logger.error("Excute added Qos...");
 		
 		sql = 
-				"SELECT B.SERVICEID, SUBSTR(S2TMSISDN,4,8) MSISDN, S2TIMSI IMSI,B.PRICEPLANID,A.ADDONCODE,A.ADDONACTION,A.REQUESTDATETIME "
-				+ "FROM ADDONSERVICE A, SERVICE B, IMSI C "
-				+ "WHERE A.ADDONCODE IN ('SX001','SX002') AND A.S2TMSISDN=B.SERVICECODE AND B.SERVICEID=C.SERVICEID AND A.S2TIMSI=C.IMSI "
+				"SELECT SUBSTR(A.S2TMSISDN,4,8) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,A.REQUESTDATETIME "
+				+ "FROM ADDONSERVICE A "
+				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
 				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' ) "
-				+ "ORDER BY A.REQUESTDATETIME ASC ";
+				+ "ORDER BY A.REQUESTDATETIME ASC";
 
 		try {
 			Statement st = conn.createStatement();
