@@ -40,6 +40,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 	Connection conn = null,conn2=null;
 	//static int runInterval = 1000*60*10; //10min
 	static int period_Time=10;//min
+	static String number_section=null;
+	static String initialTime ;
+	
 	static Properties props =new Properties();
 	static Logger logger =null;
 	
@@ -91,6 +94,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 			if(w!=null && !"".equals(w) && w.matches("^\\d+$"))
 				waitTime=Integer.parseInt(w);
 			logger.info("Set wait time "+w);
+			
+			number_section = props.getProperty("number_section");
 
 		} catch (FileNotFoundException e) {
 			logger.error("Got FileNotFoundException,File Path : "+path,e);
@@ -178,15 +183,23 @@ public class QosBatch extends  TimerTask implements Runnable {
 	}
 	
 	
+	static SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+	
 	private boolean setTime(){
 		
 		boolean result = true;
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+		
 		
 		nowTimeS = sdf.format(nowTime);
+		
+		if("000".equals(nowTimeS.substring(8,11))){
+			sendMail("Qos notification mail ("+new Date()+") \n","ranger.kao@sim2travel.com");
+		}
+		
+		
 		if(lastTime==null){
 			try {
-				preTime=sdf.parse("20160919110749");
+				preTime=sdf.parse(initialTime);
 			} catch (ParseException e) {
 				StringWriter s = new StringWriter();
 				e.printStackTrace(new PrintWriter(s));
@@ -254,7 +267,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	//20150526 mod
 	//mail host server had ended
 	//change send from local machine, solaris not use mail conmand, is use mailx,and final location end by dot. 
-	private void sendMail(String msg){
+	private void sendMail(String msg,String recevier){
 		String ip ="";
 		try {
 			ip = InetAddress.getLocalHost().getHostAddress();
@@ -270,7 +283,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		String [] cmd=new String[3];
 		cmd[0]="/bin/bash";
 		cmd[1]="-c";
-		cmd[2]= "/bin/echo \""+msg+"\" | /bin/mailx -s \"Qos System alert\" -r  Qos_Batch_ALERT_MAIL "+props.getProperty("mail.Receiver")+"." ; ;
+		cmd[2]= "/bin/echo \""+msg+"\" | /bin/mailx -s \"Qos System alert\" -r  Qos_Batch_ALERT_MAIL "+recevier+"." ; ;
 
 		try{
 			Process p = Runtime.getRuntime().exec (cmd);
@@ -279,6 +292,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}catch (Exception e){
 			System.out.println("send mail fail:"+msg);
 		}
+	}
+	private void sendMail(String msg){
+		sendMail(msg,props.getProperty("mail.Receiver"));
 	}
 	
 	/*private void sendMail(String content){
@@ -506,7 +522,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return String.valueOf(responseCode);
 	}
 	
-	private boolean addQos(){
+	/*private boolean addQos(){
 		logger.error("Excute add Qos...");
 		ACTION="A";
 		sql=
@@ -515,7 +531,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
 				+ "AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' ) ";
+				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%'  OR A.SERVICECODE like '8525392%' ) ";
 		try {
 			Statement st = conn2.createStatement();
 			logger.info("Search add : "+sql);
@@ -555,9 +571,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return false;
 		}
 		return true;
-	}
+	}*/
 	
-	private boolean deleteQos(){
+	/*private boolean deleteQos(){
 		logger.error("Excute delete Qos...");
 		ACTION="D";
 		
@@ -567,7 +583,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
 				+ "AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' ) ";
+				+ "AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) ";
 	
 		try {
 			Statement st = conn2.createStatement();
@@ -607,9 +623,106 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return false;
 		}
 		return true;
+	}*/
+	
+	private boolean addAndDeleteQos(){
+		logger.error("Excute addAndDeleteQos Qos...");
+		
+		String sectionCondition = "" ;
+		if(number_section!=null){
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.SERVICECODE like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+		}
+		
+		sql=
+				"SELECT SERVICEID,  MSISDN, IMSI,PRICEPLANID,ACTION,TIME "
+				+ "from( "
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID,C.COMPLETEDATE TIME,'D' ACTION "
+				+ "		FROM SERVICE A, IMSI B, TERMINATIONORDER C "
+				+ "		WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
+				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ sectionCondition
+				//+ "		AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) "
+				+ "        UNION"
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID, A.DATEACTIVATED TIME,'A' ACTION"
+				+ "				FROM SERVICE A, IMSI B "
+				+ "				WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
+				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+				+ sectionCondition
+				//+ "				AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%'  OR A.SERVICECODE like '8525392%' ) "
+				+ "        )"
+				+ "        ORDER BY TIME";
+	
+		try {
+			Statement st = conn2.createStatement();
+			logger.info("Search add and delete : "+sql);
+			ResultSet rs = st.executeQuery(sql);
+			while(rs.next()){
+				MSISDN=rs.getString("MSISDN");
+				IMSI=rs.getString("IMSI");
+				ACTION = rs.getString("ACTION");
+				
+				String pricePlanId = rs.getString("PRICEPLANID");
+				//20150702 cancel
+				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+				//因NTT 香港 160 不需限速，故拿掉
+				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
+					//20150409
+					//PLAN="1";
+					PLAN="3";
+				}else{
+					PLAN="2";
+				}
+				
+				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+					excutePost();
+				}else{
+					logger.error(" Because of MSISDN  or IMSI is null  , Can't delete Qos .");
+				}
+				
+			}
+			st.close();
+			rs.close();
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+			//sendMail
+			sendMail("At Cancel occure Exception("+new Date()+") \n"+s);
+			return false;
+		}
+		return true;
 	}
+	
 	private boolean changeQos(){
 		logger.error("Excute change Qos...");
+		
+		String sectionCondition = "" ;
+		String sectionCondition2 = "" ;
+		if(number_section!=null){
+			
+			sectionCondition += "AND ( 1=1 ";
+			sectionCondition2 += "AND ( 1=1 ";
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.PREVPHONENUMBER like '"+sections[i]+"%' ";
+				sectionCondition2 += "OR A.NEWPHONENUMBER like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			sectionCondition2 += ") ";
+		}
+		
 		sql=
 				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID "
 				+ "FROM PHONENUMBERCHANGEORDER A, SERVICEORDER B, IMSI C,SERVICE D "
@@ -617,8 +730,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND A.ORDERID=B.ORDERID AND B.SERVICEID=C.SERVICEID AND C.SERVICEID =D.SERVICEID "
 				+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.PREVPHONENUMBER like '8526640%' OR  A.PREVPHONENUMBER like '8525609%'  OR A.PREVPHONENUMBER like '8526947%' ) "
-				+ "AND (A.NEWPHONENUMBER like '8526640%' OR  A.NEWPHONENUMBER like '8525609%'  OR A.NEWPHONENUMBER like '8526947%' ) ";
+				//+ "AND (A.PREVPHONENUMBER like '8526640%' OR  A.PREVPHONENUMBER like '8525609%'  OR A.PREVPHONENUMBER like '8526947%'   OR A.PREVPHONENUMBER like '8525392%' ) "
+				//+ "AND (A.NEWPHONENUMBER like '8526640%' OR  A.NEWPHONENUMBER like '8525609%'  OR A.NEWPHONENUMBER like '8526947%'   OR A.NEWPHONENUMBER like '8525392%' ) "
+				+ sectionCondition
+				+ sectionCondition2
+				
+				;
 
 		
 		
@@ -695,13 +812,26 @@ public class QosBatch extends  TimerTask implements Runnable {
 	private boolean added(){
 		logger.error("Excute added Qos...");
 		
+		String sectionCondition = "" ;
+		if(number_section!=null){
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.S2TMSISDN like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+		}
 		sql = 
 				"SELECT SUBSTR(A.S2TMSISDN,4,8) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,A.REQUESTDATETIME "
 				+ "FROM ADDONSERVICE A "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' ) "
+				//+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%'   OR A.S2TMSISDN like '8525392%'  ) "
+				+ sectionCondition
 				+ "ORDER BY A.REQUESTDATETIME ASC";
 
 		try {
@@ -771,7 +901,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND A.ADDONACTION='A' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' )  ";
+				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%'   OR A.SERVICECODE like '8525392%'  )  ";
 
 		try {
 			Statement st = conn.createStatement();
@@ -841,7 +971,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "AND A.ADDONACTION='D' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%' )  ";
+				+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%'   OR A.SERVICECODE like '8525392%'  )  ";
 
 		try {
 			Statement st = conn.createStatement();
@@ -909,7 +1039,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
 			startTime = nowTime.getTime();
 			
-			if(setTime()&&deleteQos()&&addQos()&&changeQos()&&added()){
+			if(setTime()&&addAndDeleteQos()&&changeQos()&&added()){
 				lastTime=nowTime;
 			}
 
@@ -924,10 +1054,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		closeConnect();
 	}
-	
-	
 
-	
 	public static void main(String[] args){
 		
 		/*if(args.length>0 && args[0].matches("^\\d+$")){
@@ -936,6 +1063,13 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}*/
 		
 		loadProperties();
+		
+		if(args.length>0){
+			initialTime = args[0];
+		}else{
+			//initialTime = sdf.format(new Date());
+			initialTime = "20170103004650";
+		}
 		
 		//regularTimeRun();		
 		//20150420 測試新用法 timer 與 timerTask
