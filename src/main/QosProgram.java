@@ -51,7 +51,7 @@ public class QosProgram {
 	
 	private static String errorMsg;
 	
-	static String resultCode;
+	static String resultCode;	
 	
 	private static  void loadProperties(){
 		System.out.println("initial Log4j, property !");
@@ -268,7 +268,7 @@ public class QosProgram {
 		BufferedReader reader = null;
 		try {
 			reader = new BufferedReader(new InputStreamReader(new FileInputStream(filePath), "UTF-8")); 
-			// «ü©wÅª¨ú¤å¥óªº½s½X®æ¦¡¡A¥H§K¥X²{¤¤¤å¶Ã½X
+			// æŒ‡å®šè®€å–æ–‡ä»¶çš„ç·¨ç¢¼æ ¼å¼ï¼Œä»¥å…å‡ºç¾ä¸­æ–‡äº‚ç¢¼
 
 			String str = null;
 
@@ -279,7 +279,7 @@ public class QosProgram {
 
 				String[] ims=s.split(",");
 				
-				//20150420 ½Õ¾ãtxt Äæ¦ì   IMSI MSISDN PLAN ACTION
+				//20150420 èª¿æ•´txt æ¬„ä½   IMSI MSISDN PLAN ACTION
 				if(ims==null||"".equals(ims[0])||ims[0].startsWith("#")){
 					logger.info(s);
 					continue;
@@ -573,7 +573,7 @@ public class QosProgram {
 			
 			
 			if(args.length<1){
-				System.out.println("lack parameter¡I");
+				System.out.println("lack parameterï¼");
 				return;
 			}
 			
@@ -583,18 +583,18 @@ public class QosProgram {
 			int IMSILength = 15;
 			/*if(args.length>1&&!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=IMSILength &&
 					!"".equals(args[1])&&args[1].matches("^\\d+$")&&args[1].length()>=msisdnLength){
-				//¯Â¼Æ¦r¡AMsisdn
+				//ç´”æ•¸å­—ï¼ŒMsisdn
 				logger.info("execute by imsi,msisdn...");
 				String msisdn = args[1].substring(args[1].length()-msisdnLength,args[1].length());
 				excuteByMsisdn(args[0],msisdn);*/
 			if(!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=msisdnLength){
-				//¯Â¼Æ¦r¡AMsisdn
+				//ç´”æ•¸å­—ï¼ŒMsisdn
 				logger.info("execute by imsi,msisdn...");
 				String msisdn = args[0].substring(args[0].length()-msisdnLength,args[0].length());
 				excuteByMsisdn(msisdn);
 				
 			}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
-				//.txt ÀÉ®×
+				//.txt æª”æ¡ˆ
 				logger.info("execute by file...");
 				String filename;
 				//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";

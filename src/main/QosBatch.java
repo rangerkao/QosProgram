@@ -1,6 +1,6 @@
 
 /**
- * 2014/12/15∂}©lπBß@
+ * 2014/12/15ÈñãÂßãÈÅã‰Ωú
  *
  */
 
@@ -25,8 +25,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -67,7 +72,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 	static int tCount=0;
 	
 	
-	
+	static List postdatas = new ArrayList();
 	
 	private static  void loadProperties(){
 		System.out.println("initial Log4j, property !");
@@ -214,7 +219,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		preTimeS = sdf.format(preTime);
 		
-		logger.info("Proccess from "+preTime+" to "+nowTime);
+		//preTimeS = "20170210093000";
+		//nowTimeS = "20170210103000";
+		
+		logger.info("Proccess from "+preTimeS+" to "+nowTimeS);
 		return result;
 	}
 	
@@ -429,9 +437,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 	}*/
 	
 	
-	private String excutePost(){
+	private String excutePost(String msisdn,String imsi,String action,String plan){
 		String url=	"http://"+IP+"/mvno_api/MVNO_UPDATE_QOS";
-		String param="VERSION="+VERSION+"&MSISDN="+MSISDN+"&IMSI="+IMSI+"&DATE_TIME="+setDayTime()+"&VENDOR="+VENDOR+"&ACTION="+ACTION+"&PLAN="+PLAN+"";
+		String param="VERSION="+VERSION+"&MSISDN="+msisdn+"&IMSI="+imsi+"&DATE_TIME="+setDayTime()+"&VENDOR="+VENDOR+"&ACTION="+action+"&PLAN="+plan+"";
 		String result=null;
 		
 		try {
@@ -440,7 +448,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			
 			sql=
 					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
-					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE)";
+					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+imsi+"','"+msisdn+"','"+action+"','"+plan+"','"+result+"','"+resultCode+"',SYSDATE)";
 
 			logger.debug("Excute Sql : "+sql);
 			
@@ -543,7 +551,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				
 				//20150702 cancel
 				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-				//¶]NTT ≠ª¥‰ 160 §£ª›≠≠≥t°A¨GÆ≥±º
+				//Âõ†NTT È¶ôÊ∏Ø 160 ‰∏çÈúÄÈôêÈÄüÔºåÊïÖÊãøÊéâ
 				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					//20150409 mod
 					//PLAN="1";
@@ -595,7 +603,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				String pricePlanId = rs.getString("PRICEPLANID");
 				//20150702 cancel
 				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-				//¶]NTT ≠ª¥‰ 160 §£ª›≠≠≥t°A¨GÆ≥±º
+				//Âõ†NTT È¶ôÊ∏Ø 160 ‰∏çÈúÄÈôêÈÄüÔºåÊïÖÊãøÊéâ
 				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					//20150409
 					//PLAN="1";
@@ -644,7 +652,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		sql=
 				"SELECT SERVICEID,  MSISDN, IMSI,PRICEPLANID,ACTION,TIME "
 				+ "from( "
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID,C.COMPLETEDATE TIME,'D' ACTION "
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID,TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,'D' ACTION "
 				+ "		FROM SERVICE A, IMSI B, TERMINATIONORDER C "
 				+ "		WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
 				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
@@ -652,7 +660,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ sectionCondition
 				//+ "		AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) "
 				+ "        UNION"
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID, A.DATEACTIVATED TIME,'A' ACTION"
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID, TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS') TIME,'A' ACTION"
 				+ "				FROM SERVICE A, IMSI B "
 				+ "				WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
 				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
@@ -674,7 +682,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				String pricePlanId = rs.getString("PRICEPLANID");
 				//20150702 cancel
 				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-				//¶]NTT ≠ª¥‰ 160 §£ª›≠≠≥t°A¨GÆ≥±º
+				//Âõ†NTT È¶ôÊ∏Ø 160 ‰∏çÈúÄÈôêÈÄüÔºåÊïÖÊãøÊéâ
 				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					//20150409
 					//PLAN="1";
@@ -684,10 +692,19 @@ public class QosBatch extends  TimerTask implements Runnable {
 				}
 				
 				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
-					excutePost();
+					Map m = new HashMap();
+					m.put("MSISDN", MSISDN);
+					m.put("PLAN", PLAN);
+					m.put("ACTION", ACTION);
+					m.put("IMSI", IMSI);
+					m.put("TIME", rs.getString("TIME"));
+					postdatas.add(m);
+					//excutePost();
 				}else{
 					logger.error(" Because of MSISDN  or IMSI is null  , Can't delete Qos .");
 				}
+				
+				
 				
 			}
 			st.close();
@@ -724,7 +741,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}
 		
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID "
+				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID,TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS') TIME "
 				+ "FROM PHONENUMBERCHANGEORDER A, SERVICEORDER B, IMSI C,SERVICE D "
 				+ "WHERE A.PREVPHONENUMBER<>A.NEWPHONENUMBER "
 				+ "AND A.ORDERID=B.ORDERID AND B.SERVICEID=C.SERVICEID AND C.SERVICEID =D.SERVICEID "
@@ -779,12 +796,30 @@ public class QosBatch extends  TimerTask implements Runnable {
 					//Delete old
 					MSISDN=oMSISDN;
 					ACTION="D";
-					excutePost();
+					
+					Map m = new HashMap();
+					m.put("MSISDN", MSISDN);
+					m.put("PLAN", PLAN);
+					m.put("ACTION", ACTION);
+					m.put("IMSI", IMSI);
+					m.put("TIME", rs.getString("TIME"));
+					postdatas.add(m);
+					
+					//excutePost();
 					
 					//Add new
 					MSISDN=nMSISDN;
 					ACTION="A";
-					excutePost();
+					
+					m = new HashMap();
+					m.put("MSISDN", MSISDN);
+					m.put("PLAN", PLAN);
+					m.put("ACTION", ACTION);
+					m.put("IMSI", IMSI);
+					m.put("TIME", rs.getString("TIME"));
+					postdatas.add(m);
+					
+					//excutePost();
 				}else{
 					logger.error(" Because of new MSISDN,old MSISDN  or IMSI is null  , Can't change Qos .");
 				}
@@ -825,7 +860,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			sectionCondition += ") ";
 		}
 		sql = 
-				"SELECT SUBSTR(A.S2TMSISDN,4,8) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,A.REQUESTDATETIME "
+				"SELECT SUBSTR(A.S2TMSISDN,4,8) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
 				+ "FROM ADDONSERVICE A "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
@@ -851,24 +886,52 @@ public class QosBatch extends  TimerTask implements Runnable {
 						//Delete old
 						PLAN="2";
 						ACTION="D";
-						excutePost();
+						//excutePost();
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", rs.getString("TIME"));
+						postdatas.add(m);
 						
 						//Add new
 						if("SX001".equals(ADDONCODE))PLAN="3";
 						if("SX002".equals(ADDONCODE))PLAN="4";					
 						ACTION="A";
-						excutePost();	
+						m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", rs.getString("TIME"));
+						postdatas.add(m);
+						//excutePost();	
 					}else if("D".equals(ADDONACTION)){
 						//Delete old
 						if("SX001".equals(ADDONCODE))PLAN="3";
 						if("SX002".equals(ADDONCODE))PLAN="4";	
 						ACTION="D";
-						excutePost();
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", rs.getString("TIME"));
+						postdatas.add(m);
+						//excutePost();
 						
 						//Add new
 						PLAN="2";
 						ACTION="A";
-						excutePost();
+						m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", rs.getString("TIME"));
+						postdatas.add(m);
+						//excutePost();
 					}
 				}else{
 					logger.error(" Because of MSISDN  or IMSI is null  , Can't added  Qos .");
@@ -1024,7 +1087,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return true;
 	}*/
 	
-	private void proccess(){
+	private void proccess() throws ParseException{
 		
 		long startTime;
 		long endTime;
@@ -1039,7 +1102,22 @@ public class QosBatch extends  TimerTask implements Runnable {
 			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
 			startTime = nowTime.getTime();
 			
+			postdatas.clear();
 			if(setTime()&&addAndDeleteQos()&&changeQos()&&added()){
+				
+				if(postdatas.size()!=0){
+					logger.info("Sorting list with size "+postdatas.size());
+					List result = mergerSortList(0,postdatas.size()-1);
+					Iterator it = result.iterator();
+					
+					logger.info("Execute post... ");
+					while(it.hasNext()){
+						Map m = (Map) it.next();
+						//System.out.println(m.get("TIME")+":"+m.get("MSISDN")+":"+m.get("ACTION")+":"+m.get("PLAN"));
+						excutePost((String)m.get("MSISDN"),(String)m.get("IMSI"),(String)m.get("ACTION"),(String)m.get("PLAN"));
+					}
+				}
+				
 				lastTime=nowTime;
 			}
 
@@ -1053,6 +1131,39 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}
 		
 		closeConnect();
+	}
+	
+	public static List  mergerSortList(int start,int end) throws ParseException{
+		List result = new ArrayList();
+		if(end ==start ){
+			result.add(postdatas.get(start));
+		}else{
+			int mid = (end+start)/2;
+			List left = mergerSortList(start,mid);
+			List right = mergerSortList(mid+1,end);
+			int l = 0,r = 0;
+			while(true){
+				if(l<left.size() && r<right.size()){
+					Map lm = (Map) left.get(l);
+					Map rm = (Map) right.get(r);
+					if(sdf.parse((String) lm.get("TIME")).after(sdf.parse((String) rm.get("TIME")))){
+						result.add(rm);
+						r++;
+					}else{
+						result.add(lm);
+						l++;
+					}
+				}
+				else if(l<left.size()){
+					result.add(left.get(l++));
+				}else if(r<right.size()){
+					result.add(right.get(r++));
+				}else{
+					break;
+				}
+			}
+		}
+		return result;
 	}
 
 	public static void main(String[] args){
@@ -1068,16 +1179,20 @@ public class QosBatch extends  TimerTask implements Runnable {
 			initialTime = args[0];
 		}else{
 			//initialTime = sdf.format(new Date());
-			initialTime = "20170103004650";
+			initialTime = "20170221110000";
 		}
 		
 		//regularTimeRun();		
-		//20150420 ¥˙∏’∑s•Œ™k timer ªP timerTask
+		//20150420 Ê∏¨Ë©¶Êñ∞Áî®Ê≥ï timer Ëàá timerTask
 		Timer timer =new Timer();
 		timer.schedule(new QosBatch(),0, period_Time*60*1000);
 	}
 
 	public void run() {
-		proccess();
+		try {
+			proccess();
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
 	}
 }
