@@ -160,14 +160,14 @@ public class QosProgram {
 	}
 	
 	
-	private static void excuteByMsisdn(String msisdn) {
+	private static void excuteByMsisdn(String msisdn,String action) {
 		logger.info("excuteByMsisdn..."+msisdn);
 		
 		Statement st = null;
 		ResultSet rs = null;
 				
 		String plan = "2";
-		String action = "A";
+		//String action = "A";
 		String IMSI = null;
 		try {
 			st = conn.createStatement();
@@ -521,6 +521,17 @@ public class QosProgram {
 			result = HttpPost(url,param,"");
 			logger.info("Posted :"+url+"?"+param+"   \nresult:"+result);
 			
+			
+			if(!"200".equals(result)){
+				sendMail("Http connection status "+result+" is not correct at provinding data ("+param+") ");
+			}
+			
+			resultCode = resultCode.trim().replaceAll("RETURN_CODE=", "").replaceAll("\n", "");
+			
+			if(!"0".equals(resultCode)){
+				sendMail("The provision RETURN_CODE = "+resultCode+" of data ("+param+")  is not correct.");
+			}
+			
 			String sql=
 					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
 					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE)";
@@ -590,8 +601,14 @@ public class QosProgram {
 			if(!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=msisdnLength){
 				//純數字，Msisdn
 				logger.info("execute by imsi,msisdn...");
-				String msisdn = args[0].substring(args[0].length()-msisdnLength,args[0].length());
-				excuteByMsisdn(msisdn);
+				String msisdn = args[0].substring(3,args[0].length());
+				
+				String action = "A";
+				
+				if(args.length>=2 && ("A".equalsIgnoreCase(args[1])||"D".equalsIgnoreCase(args[1])))
+					action = args[1].toUpperCase();
+				
+				excuteByMsisdn(msisdn,action);
 				
 			}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
 				//.txt 檔案

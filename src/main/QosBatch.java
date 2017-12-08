@@ -300,6 +300,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}catch (Exception e){
 			System.out.println("send mail fail:"+msg);
 		}
+		
+		/*try {
+			Thread.sleep(3000);
+		} catch (InterruptedException e) {}*/
 	}
 	private void sendMail(String msg){
 		sendMail(msg,props.getProperty("mail.Receiver"));
@@ -445,6 +449,16 @@ public class QosBatch extends  TimerTask implements Runnable {
 		try {
 			result = HttpPost(url,param,"");
 			logger.info("Posted :"+url+"?"+param+"   \nresult:"+result);
+			
+			if(!"200".equals(result)){
+				sendMail("Http connection status "+result+" is not correct at provinding data ("+param+") ");
+			}
+			
+			resultCode = resultCode.trim().replaceAll("RETURN_CODE=", "").replaceAll("\n", "");
+			
+			if(!"0".equals(resultCode)){
+				sendMail("The provision RETURN_CODE = "+resultCode+" of data ("+param+")  is not correct.");
+			}
 			
 			sql=
 					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
@@ -652,7 +666,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		sql=
 				"SELECT SERVICEID,  MSISDN, IMSI,PRICEPLANID,ACTION,TIME "
 				+ "from( "
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID,TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,'D' ACTION "
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID,TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,'D' ACTION "
 				+ "		FROM SERVICE A, IMSI B, TERMINATIONORDER C "
 				+ "		WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
 				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
@@ -660,7 +674,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ sectionCondition
 				//+ "		AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) "
 				+ "        UNION"
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4,8) MSISDN, IMSI ,A.PRICEPLANID, TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS') TIME,'A' ACTION"
+				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID, TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS') TIME,'A' ACTION"
 				+ "				FROM SERVICE A, IMSI B "
 				+ "				WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
 				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
@@ -741,7 +755,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		}
 		
 		sql=
-				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4,8) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4,8) NEW_MSISDN, IMSI ,D.PRICEPLANID,TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS') TIME "
+				"SELECT B.SERVICEID, SUBSTR(PREVPHONENUMBER,4) OLD_MSISDN, SUBSTR(NEWPHONENUMBER,4) NEW_MSISDN, IMSI ,D.PRICEPLANID,TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS') TIME "
 				+ "FROM PHONENUMBERCHANGEORDER A, SERVICEORDER B, IMSI C,SERVICE D "
 				+ "WHERE A.PREVPHONENUMBER<>A.NEWPHONENUMBER "
 				+ "AND A.ORDERID=B.ORDERID AND B.SERVICEID=C.SERVICEID AND C.SERVICEID =D.SERVICEID "
@@ -860,7 +874,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			sectionCondition += ") ";
 		}
 		sql = 
-				"SELECT SUBSTR(A.S2TMSISDN,4,8) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
+				"SELECT SUBSTR(A.S2TMSISDN,4) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
 				+ "FROM ADDONSERVICE A "
 				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
