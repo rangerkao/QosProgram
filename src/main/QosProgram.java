@@ -53,6 +53,74 @@ public class QosProgram {
 	
 	static String resultCode;	
 	
+	/**
+	 * 支援模式
+	 * 1.檔名為參數，以檔案供裝
+	 * 2.門號 [Action] [Plan]
+	 * @param args
+	 * @throws InterruptedException
+	 */
+	public static void main(String args[]) throws InterruptedException{
+		//args=new String[]{"69471054","9","D"};
+		
+		if(args.length<1){
+			System.out.println("lack parameter！");
+			return;
+		}
+		loadProperties();
+		connectDB();
+		int msisdnLength = 8;
+		int IMSILength = 15;
+		logger.info("Parameter length:"+args.length);
+		//第一參數純數字，定義為MSISDN
+		if(!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=msisdnLength&&args[0].length()<=IMSILength){
+			
+			logger.info("execute by imsi,msisdn...");
+			logger.info("Parameter length:"+args.length);
+			
+			String msisdn = args[0];
+			logger.info("Parameter 1 (Msisdn):"+args[0]);
+			
+			if(msisdn.startsWith("852"))
+				msisdn = msisdn.substring(3,args[0].length());
+			
+			String plan = null;
+			//假設定義第三參數，訂為PLAN
+			if(args.length>=2)
+				logger.info("Parameter 2 (Plan):"+args[1]);
+			if(args.length>=2 && args[1].matches("\\d+"))
+				plan = args[1];
+			logger.info("plan:"+plan);
+			
+			String action = "A";
+			//假設定義第二參數，訂為Action
+			if(args.length>=3)
+				logger.info("Parameter 3 (Action):"+args[2]);
+			if(args.length>=3 && ("A".equalsIgnoreCase(args[2])||"D".equalsIgnoreCase(args[2])))
+				action = args[2].toUpperCase();
+			
+			
+			excuteByMsisdn(msisdn,action,plan);
+
+			//定義為以Txt結尾的檔案
+		}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
+			//.txt 檔案
+			logger.info("execute by file...");
+			String filename;
+			//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
+			filename=args[0];
+			readtxt(filename);
+			
+		}else{
+			System.out.print("can't resolve parameter!");
+			for(int i = 0 ;i<args.length;i++)
+				System.out.print(","+args[i]);
+			System.out.println();
+		}
+		closeConnect();
+
+	}
+	
 	private static  void loadProperties(){
 		System.out.println("initial Log4j, property !");
 		String path=QosProgram.class.getResource("").toString().replaceAll("file:", "")+"Log4j.properties";
@@ -160,15 +228,82 @@ public class QosProgram {
 	}
 	
 	
-	private static void excuteByMsisdn(String msisdn,String action) {
+	private static void excuteByMsisdn(String msisdn,String action,String plan) {
 		logger.info("excuteByMsisdn..."+msisdn);
+
+		if(plan == null)
+			plan = findPlan(msisdn);
+
+		String IMSI = findIMSI(msisdn);
 		
+		if(IMSI==null){
+			logger.error("Can't find IMSI!");
+			return;
+		}
+		
+		excutePost("1", msisdn, IMSI, setDayTime(), "S", action, plan);
+	}
+	
+	public static String findPlan(String msisdn) {
+		
+		String sql = "select SERVICEID,S2TMSISDN,SERVICECODE " + 
+				"from ADDONSERVICE_N " + 
+				"where S2TMSISDN like '%"+msisdn+"' " + 
+				"and ENDDATE is null " +
+				"and ServiceCode IN ('SX001','SX002','SX004')" ;
+		
+		String serviceCode = null;
 		Statement st = null;
 		ResultSet rs = null;
-				
-		String plan = "2";
-		//String action = "A";
+		try {
+			st = conn.createStatement();
+			
+			st.executeQuery(sql);
+						
+			logger.info("Execute sql:"+sql);
+			rs = st.executeQuery(sql);
+			
+			while(rs.next()){
+				serviceCode = rs.getString("SERVICECODE");
+			}
+			
+			//香港華人上網包
+			if("SX001".equalsIgnoreCase(serviceCode)) {
+				//return "3";
+				return "5";
+			}else //香港+大陸華人上網包
+				if("SX002".equalsIgnoreCase(serviceCode)) {
+				//return "4";
+				return "6";
+			/*}else //美國流量包
+				if("SX003".equalsIgnoreCase(serviceCode)) {*/
+				//為確定是否保留
+			}else //多國流量包
+				if("SX004".equalsIgnoreCase(serviceCode)) {
+				return "10";
+			}
+			
+
+		} catch (SQLException e) {
+			logger.error("Got SQLException",e);
+		}finally{
+			try {
+				if(st != null)
+					st.close();
+				if(rs != null)
+					rs.close();
+			} catch (SQLException e) {
+			}
+		}
+		
+		//return "2";
+		return "9";
+	}
+	
+	public static String findIMSI(String msisdn) {
 		String IMSI = null;
+		Statement st = null;
+		ResultSet rs = null;
 		try {
 			st = conn.createStatement();
 			
@@ -179,26 +314,6 @@ public class QosProgram {
 			
 			while(rs.next()){
 				IMSI = rs.getString("IMSI");
-			}
-			
-			if(IMSI==null){
-				logger.error("Can't find IMSI!");
-				return;
-			}
-			
-			rs.close();
-			
-			String sql2 = 
-					"SELECT CASE a.SERVICECODE WHEN 'SX001' THEN '3' WHEN 'SX002' THEN '4' ELSE '2' END PLAN "
-					+ "FROM ADDONSERVICE_N A "
-					+ "WHERE A.STARTDATE < SYSDATE AND (SYSDATE < A.ENDDATE OR A.ENDDATE IS NULL) "
-					+ "AND  A.S2TIMSI = '"+IMSI+"' AND A.S2TMSISDN like '%"+msisdn+"'";
-			
-			logger.debug("Excute Sql : "+sql2);
-			rs = st.executeQuery(sql2);
-
-			while(rs.next()){
-				plan = rs.getString("PLAN");
 			}
 
 		} catch (SQLException e) {
@@ -213,55 +328,55 @@ public class QosProgram {
 			}
 		}
 		
-		excutePost("1", msisdn, IMSI, setDayTime(), "S", action, plan);
+		return IMSI;
 	}
 
 	//set run time
-		private static String setDayTime(){ 
-			SimpleDateFormat sdf = new SimpleDateFormat("dd---yyyy.HH:mm:ss");
-			String dString=sdf.format(new Date());
-			int dm=Calendar.getInstance().get(Calendar.MONTH)+1;
-			switch(dm){
-				case 1:
-					dString=dString.replaceAll("---", "-JAN-");//Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec
-					break;
-				case 2:
-					dString=dString.replaceAll("---", "-FEB-");
-					break;
-				case 3:
-					dString=dString.replaceAll("---", "-MAR-");
-					break;
-				case 4:
-					dString=dString.replaceAll("---", "-APR-");
-					break;
-				case 5:
-					dString=dString.replaceAll("---", "-MAY-");
-					break;
-				case 6:
-					dString=dString.replaceAll("---", "-JUN-");
-					break;
-				case 7:
-					dString=dString.replaceAll("---", "-JUL-");
-					break;
-				case 8:
-					dString=dString.replaceAll("---", "-AUG-");
-					break;
-				case 9:
-					dString=dString.replaceAll("---", "-SEP-");
-					break;
-				case 10:
-					dString=dString.replaceAll("---", "-OCT-");
-					break;
-				case 11:
-					dString=dString.replaceAll("---", "-NOV-");
-					break;
-				case 12:
-					dString=dString.replaceAll("---", "-DEC-");
-					break;
-				default:
-			}
-			return dString;
+	private static String setDayTime(){ 
+		SimpleDateFormat sdf = new SimpleDateFormat("dd---yyyy.HH:mm:ss");
+		String dString=sdf.format(new Date());
+		int dm=Calendar.getInstance().get(Calendar.MONTH)+1;
+		switch(dm){
+			case 1:
+				dString=dString.replaceAll("---", "-JAN-");//Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec
+				break;
+			case 2:
+				dString=dString.replaceAll("---", "-FEB-");
+				break;
+			case 3:
+				dString=dString.replaceAll("---", "-MAR-");
+				break;
+			case 4:
+				dString=dString.replaceAll("---", "-APR-");
+				break;
+			case 5:
+				dString=dString.replaceAll("---", "-MAY-");
+				break;
+			case 6:
+				dString=dString.replaceAll("---", "-JUN-");
+				break;
+			case 7:
+				dString=dString.replaceAll("---", "-JUL-");
+				break;
+			case 8:
+				dString=dString.replaceAll("---", "-AUG-");
+				break;
+			case 9:
+				dString=dString.replaceAll("---", "-SEP-");
+				break;
+			case 10:
+				dString=dString.replaceAll("---", "-OCT-");
+				break;
+			case 11:
+				dString=dString.replaceAll("---", "-NOV-");
+				break;
+			case 12:
+				dString=dString.replaceAll("---", "-DEC-");
+				break;
+			default:
 		}
+		return dString;
+	}
 	
 	public static void readtxt(String filePath) throws InterruptedException {
 			
@@ -290,7 +405,21 @@ public class QosProgram {
 					continue;
 				}
 				
-				excutePost("1", ims[1], ims[0], setDayTime(), "S", ims[3], ims[2]);
+
+				String MSISDN = ims[1] ,IMSI = ims[0],ACTION = ims[3],PLAN = ims[2];
+				
+				//20180612 add
+				MSISDN = MSISDN.replaceAll("^852", "");
+				
+				excutePost("1", MSISDN, IMSI, setDayTime(), "S", ACTION , PLAN);
+				
+				/*String serviceid = queryServiceidByMsisdn(MSISDN);
+				if(!isGprsOn(serviceid))
+					excutePost("1", MSISDN, IMSI, setDayTime(), "S", ACTION , PLAN);
+				else
+					logger.info("GPRS on skip "+MSISDN);*/
+				
+				
 			}
 
 		} catch (FileNotFoundException e) {
@@ -305,6 +434,131 @@ public class QosProgram {
 			} catch (IOException e) {
 			}
 		}
+	}
+	
+	private static boolean isGprsOn(String serviceid) {
+		String sql = "SELECT COUNT(*) cd FROM ( "
+				+ "SELECT SERVICEID FROM SERVICEPARAMETER WHERE PARAMETERID=3749 "
+				+ "UNION "
+				+ "SELECT A.SERVICEID FROM PARAMETERVALUE A, SERVICE B  "
+				+ "WHERE A.PARAMETERVALUEID=3749 AND A.SERVICEID=B.SERVICEID "
+				+ "  AND A.SERVICEID NOT IN (SELECT SERVICEID FROM SERVICEPARAMETER WHERE PARAMETERID=3749) "
+				+ ") WHERE SERVICEID="+serviceid+" ";
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			//logger.info("Check GprsOn : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return "0".equals(rs.getString("cd"))?false :true;
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+			//sendMail
+			sendMail("At check GprsOn occure Exception("+new Date()+") \n"+s);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		return false;
+	}
+	
+	private static String queryServiceidByIMSI(String IMSI) {
+		String sql = "SELECT SERVICEID "
+				+ "FROM IMSI "
+				+ "WHERE IMSI='"+IMSI+"' ";
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			//logger.info("Check GprsOn : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return rs.getString("SERVICEID");
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		return null;
+	}
+	
+	private static String queryServiceidByMsisdn(String msisdn) {
+		String sql = "select serviceid " 
+				+ "from service " 
+				+ "where datecanceled is null and servicecode ='"+msisdn+"' ";
+		
+		String sql2 = "select B.serviceid "
+				+ "from ( "
+				+ "			select servicecode,MAX(datecanceled) datecanceled "
+				+ "			from service "
+				+ "         where servicecode ='"+msisdn+"' "
+				+ "			and datecanceled is not null "
+				+ "			group by serviceCode "
+				+ "			) A , service B "
+				+ "where A.servicecode = B.servicecode "
+				+ "AND A.datecanceled = B.datecanceled ";
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			//logger.info("Check GprsOn : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return rs.getString("SERVICEID");
+			}else {
+				rs = null;
+				rs = st.executeQuery(sql2);
+				if(rs.next()){
+					return rs.getString("SERVICEID");
+				}
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		return null;
 	}
 	
 	
@@ -528,13 +782,15 @@ public class QosProgram {
 			
 			resultCode = resultCode.trim().replaceAll("RETURN_CODE=", "").replaceAll("\n", "");
 			
+			logger.info("resultCode:"+resultCode);
+			
 			if(!"0".equals(resultCode)){
 				sendMail("The provision RETURN_CODE = "+resultCode+" of data ("+param+")  is not correct.");
 			}
 			
 			String sql=
-					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
-					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE)";
+					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME,TYPE) "
+					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+IMSI+"','"+MSISDN+"','"+ACTION+"','"+PLAN+"','"+result+"','"+resultCode+"',SYSDATE,'MANUAL')";
 
 			logger.debug("Excute Sql : "+sql);
 			
@@ -572,61 +828,7 @@ public class QosProgram {
 			}
 		}
 		
-		return result;
-		
-	}
-	 
-	 public static void main(String args[]) throws InterruptedException{
-			
-			
-			//args=new String[]{"85269477975"};
-			
-			
-			
-			if(args.length<1){
-				System.out.println("lack parameter！");
-				return;
-			}
-			
-			loadProperties();
-			connectDB();
-			int msisdnLength = 8;
-			int IMSILength = 15;
-			/*if(args.length>1&&!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=IMSILength &&
-					!"".equals(args[1])&&args[1].matches("^\\d+$")&&args[1].length()>=msisdnLength){
-				//純數字，Msisdn
-				logger.info("execute by imsi,msisdn...");
-				String msisdn = args[1].substring(args[1].length()-msisdnLength,args[1].length());
-				excuteByMsisdn(args[0],msisdn);*/
-			if(!"".equals(args[0])&&args[0].matches("^\\d+$")&&args[0].length()>=msisdnLength){
-				//純數字，Msisdn
-				logger.info("execute by imsi,msisdn...");
-				String msisdn = args[0].substring(3,args[0].length());
-				
-				String action = "A";
-				
-				if(args.length>=2 && ("A".equalsIgnoreCase(args[1])||"D".equalsIgnoreCase(args[1])))
-					action = args[1].toUpperCase();
-				
-				excuteByMsisdn(msisdn,action);
-				
-			}else if(!"".equals(args[0])&&args[0].matches("^\\w+\\.txt$")){
-				//.txt 檔案
-				logger.info("execute by file...");
-				String filename;
-				//filename ="C:/Users/ranger.kao/Dropbox/workspace/addonQos/src/Qosfile.txt";
-				filename=args[0];
-				readtxt(filename);
-				
-			}else{
-				System.out.print("can't resolve parameter!");
-				for(int i = 0 ;i<args.length;i++)
-					System.out.print(","+args[i]);
-				System.out.println();
-			}
-			closeConnect();
-			
-			
-		}
+		return result;	
+	} 
 }
 

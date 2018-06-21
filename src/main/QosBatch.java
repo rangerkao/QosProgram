@@ -53,12 +53,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 	
 	static String IP="203.142.105.18"; 
 	String VERSION="1";
-	String MSISDN="66407851";
-	String IMSI="454120260232504";
-	String DATE_TIME=null;
+	//String MSISDN="66407851";
+	//String IMSI="454120260232504";
+	//String DATE_TIME=null;
 	String VENDOR="S";
-	String ACTION="A";
-	String PLAN="1";
+	//String ACTION="A";
+	//String PLAN="1";
 	
 	Date preTime; //last excute time
 	Date nowTime; //now 
@@ -73,6 +73,37 @@ public class QosBatch extends  TimerTask implements Runnable {
 	
 	
 	static List postdatas = new ArrayList();
+	
+	public static void main(String[] args){
+		
+		/*if(args.length>0 && args[0].matches("^\\d+$")){
+			period_Time=Integer.parseInt(args[0]);
+			System.out.println("Has insert parameter time "+period_Time);
+		}*/
+		
+		loadProperties();
+		
+		if(args.length>0){
+			initialTime = args[0];
+		}else{
+			//執行前10分鐘
+			initialTime = sdf.format(new Date(new Date().getTime()-1000*60*10));
+			//initialTime = "20180118151236";
+		}
+		
+		//regularTimeRun();		
+		//20150420 測試新用法 timer 與 timerTask
+		Timer timer =new Timer();
+		timer.schedule(new QosBatch(),0, period_Time*60*1000);
+	}
+
+	public void run() {
+		try {
+			proccess();
+		} catch (ParseException e) {
+			e.printStackTrace();
+		}
+	}
 	
 	private static  void loadProperties(){
 		System.out.println("initial Log4j, property !");
@@ -99,7 +130,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			if(w!=null && !"".equals(w) && w.matches("^\\d+$"))
 				waitTime=Integer.parseInt(w);
 			logger.info("Set wait time "+w);
-			
+			//避免供裝到不必要的號段，只供裝已宣告的
 			number_section = props.getProperty("number_section");
 
 		} catch (FileNotFoundException e) {
@@ -441,12 +472,26 @@ public class QosBatch extends  TimerTask implements Runnable {
 	}*/
 	
 	
-	private String excutePost(String msisdn,String imsi,String action,String plan){
+	private String excutePost(String msisdn,String imsi,String action,String plan,String type){
+		
+		if(msisdn.startsWith("852")) {
+			msisdn = msisdn.replaceAll("^852", "");
+		}
+		
 		String url=	"http://"+IP+"/mvno_api/MVNO_UPDATE_QOS";
 		String param="VERSION="+VERSION+"&MSISDN="+msisdn+"&IMSI="+imsi+"&DATE_TIME="+setDayTime()+"&VENDOR="+VENDOR+"&ACTION="+action+"&PLAN="+plan+"";
 		String result=null;
+		boolean testMode = false;
+		
+		if(testMode) {
+			logger.info("Test:"+url+"/"+param);
+			resultCode = "0";
+			return "200";
+		}
+		
 		
 		try {
+			resultCode="";
 			result = HttpPost(url,param,"");
 			logger.info("Posted :"+url+"?"+param+"   \nresult:"+result);
 			
@@ -461,10 +506,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 			}
 			
 			sql=
-					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME) "
-					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+imsi+"','"+msisdn+"','"+action+"','"+plan+"','"+result+"','"+resultCode+"',SYSDATE)";
+					"INSERT INTO QOS_PROVISION_LOG(PROVISIONID,IMSI,MSISDN,ACTION,PLAN,RESPONSE_CODE,RESULT_CODE,CERATE_TIME,TYPE) "
+					+ "VALUES(QOS_PROVISION_LOG_ID.NEXTVAL,'"+imsi+"','"+msisdn+"','"+action+"','"+plan+"','"+result+"','"+resultCode+"',SYSDATE,'"+type+"')";
 
-			logger.debug("Excute Sql : "+sql);
+			logger.info("Excute Sql : "+sql);
 			
 			Statement st = conn.createStatement();
 
@@ -495,6 +540,13 @@ public class QosBatch extends  TimerTask implements Runnable {
 			logger.error("Got InterruptedException ! : ",e);
 			//sendMail
 			sendMail("Got InterruptedException !"+s);
+		} catch (Exception e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got Exception ! : ",e);
+			//sendMail
+			sendMail("Got Exception !"+s);
 		}
 		
 		return result;
@@ -647,11 +699,176 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return true;
 	}*/
 	
-	private boolean addAndDeleteQos(){
-		logger.error("Excute addAndDeleteQos Qos...");
+	
+	
+	private String getAddonCode(String IMSI,String time) {
 		
-		String sectionCondition = "" ;
+		sql = "select A.S2TIMSI,A.STATUS,A.SERVICECODE "  
+				+ "from ADDONSERVICE_N A " 
+				+ "where 1 = 1 "  
+				+ "AND A.S2TIMSI = '"+IMSI+"' "  
+				+ "AND (A.STATUS = 'A' or (A.STATUS = 'D' and A.STARTDATE <= to_date('"+time+"','YYYYMMDDHH24MISS') and A.ENDDATE>= to_date('"+time+"','YYYYMMDDHH24MISS') )) "  
+				+ "AND A.SERVICECODE in ('SX001','SX002','SX004','SX005')"
+				+ "order by A.STARTDATE DESC";
+		
+		
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			//logger.info("getAddonCode : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return rs.getString("SERVICECODE");
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+			//sendMail
+			sendMail("At getAddonCode occure Exception("+new Date()+") \n"+s);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		
+		return null;
+	}
+	
+	
+	private String getLastIMSI(String serviceid) {
+		
+		sql = "select SERVICEID,VALUE IMSI,COMPLETEDATE " 
+				+ "from ( " 
+				+ "select b.SERVICEID,a.ORDERID,a.OLDVALUE VALUE,a.COMPLETEDATE " 
+				+ "from SERVICEINFOCHANGEORDER a, serviceorder b " 
+				+ "where a.FIELDID = 3713 and a.orderid=b.orderid " 
+				+ "AND a.COMPLETEDATE is not null  " 
+				+ "union " 
+				+ "select SERVICEID,ORDERID,FIELDVALUE VALUE,COMPLETEDATE " 
+				+ "from NEWSERVICEORDERINFO " 
+				+ "where FIELDID = 3713 " 
+				+ "AND TO_CHAR(completedate,'yyyymmdd')>='20070205' " 
+				+ ") " 
+				+ "order by COMPLETEDATE DESC ";
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			logger.info("getLastIMSI : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return rs.getString("VALUE");
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+			//sendMail
+			sendMail("At getLastIMSI occure Exception("+new Date()+") \n"+s);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		
+		return null;
+	}
+	
+	private String getPlan(String IMSI,String time) {
+		String addonCode = getAddonCode(IMSI,time);
+		if("SX001".equalsIgnoreCase(addonCode)) {
+			return "5";
+		}else if("SX002".equalsIgnoreCase(addonCode)) {
+			return "6";
+		}else if("SX004".equalsIgnoreCase(addonCode)) {
+			return "10";
+		}else if("SX005".equalsIgnoreCase(addonCode)) {
+			return "6";
+		}else{
+			return "9";
+		}
+	}
+	
+	private String getPrepayCardPlan(String IMSI) {
+		//20180117 add EXCEPTION of GO2PLAY
+		if(Long.parseLong(IMSI)>=Long.parseLong("454120290050007") && 
+				Long.parseLong(IMSI)<=Long.parseLong("454120290056506")) {
+			return "7";
+		}else //500門
+			if(Long.parseLong(IMSI)>=Long.parseLong("454120290056507") && 
+				Long.parseLong(IMSI)<=Long.parseLong("454120290057006")) {
+			return "5";
+		}else {
+			return "9";
+		}
+	}
+	
+	private boolean isGprsOn(String serviceid) {
+		sql = "SELECT COUNT(*) cd FROM ( "
+				+ "SELECT SERVICEID FROM SERVICEPARAMETER WHERE PARAMETERID=3749 "
+				+ "UNION "
+				+ "SELECT A.SERVICEID FROM PARAMETERVALUE A, SERVICE B  "
+				+ "WHERE A.PARAMETERVALUEID=3749 AND A.SERVICEID=B.SERVICEID "
+				+ "  AND A.SERVICEID NOT IN (SELECT SERVICEID FROM SERVICEPARAMETER WHERE PARAMETERID=3749) "
+				+ ") WHERE SERVICEID="+serviceid+" ";
+		
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			st = conn.createStatement();
+			//logger.info("Check GprsOn : "+sql);
+			rs = st.executeQuery(sql);
+			if(rs.next()){
+				return "0".equals(rs.getString("cd"))?false :true;
+			}
+		} catch (SQLException e) {
+			StringWriter s = new StringWriter();
+			e.printStackTrace(new PrintWriter(s));
+			errorMsg=s.toString();
+			logger.error("Got SQLException",e);
+			//sendMail
+			sendMail("At check GprsOn occure Exception("+new Date()+") \n"+s);
+		}finally {
+			if(st!=null) {
+				try {
+					st.close();
+				} catch (SQLException e) {}
+			}
+			if(rs!=null) {
+				try {
+					rs.close();
+				} catch (SQLException e) {}
+			}	
+		}
+		return false;
+	}
+	
+	private boolean gprsChangeQos() {
+		logger.error("gprsChangeQos...");
+		
 		if(number_section!=null){
+			
+			String sectionCondition = "" ;
 			
 			sectionCondition += "AND ( 1=1 ";
 			
@@ -661,81 +878,670 @@ public class QosBatch extends  TimerTask implements Runnable {
 				sectionCondition += "OR A.SERVICECODE like '"+sections[i]+"%' ";
 			}
 			sectionCondition += ") ";
-		}
+			
+			/*sql = "SELECT A.SERVICEID, A.SERVICECODE MSISDN, D.IMSI, TO_CHAR(B.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME , " 
+					+ "DECODE(C.OPERATION,'0','ENABLE','1','DISABLE','DISABLE') DATA_STATUS " 
+					+ "FROM SERVICE A, SERVICEORDER B, SERVICEPARAMETERCHANGEORDER C, IMSI D " 
+					+ "WHERE A.SERVICEID=B.SERVICEID AND B.ORDERID=C.ORDERID AND A.SERVICEID=D.SERVICEID " 
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "//  -- QUERY ORDER START TIME" + 
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "//   -- QUERY ORDER END TIME" + 
+					+ "  AND C.PARAMETERID=3749 " //  -- DATA SERVICE (PDP)" + 
+					+ sectionCondition
+					+ "ORDER BY B.COMPLETEDATE ";*/
+			
+			sql = "SELECT SERVICEID, SERVICECODE MSISDN, IMSI, TO_CHAR(COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME, DATA_STATUS "
+					+ "FROM ( "
+					+ "SELECT A.SERVICEID, A.SERVICECODE, D.IMSI, B.COMPLETEDATE ,  "
+					+ "DECODE(C.OPERATION,'0','ENABLE','1','DISABLE','DISABLE') DATA_STATUS "
+					+ "FROM SERVICE A, SERVICEORDER B, SERVICEPARAMETERCHANGEORDER C, IMSI D "
+					+ "WHERE A.SERVICEID=B.SERVICEID AND B.ORDERID=C.ORDERID AND A.SERVICEID=D.SERVICEID "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "// -- QUERY ORDER START TIME "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "//  -- QUERY ORDER END TIME "
+					+ "  AND C.PARAMETERID=3749 "// -- DATA SERVICE (PDP) "
+					+ sectionCondition
+					+ "UNION "
+					+ "SELECT A.SERVICEID, A.SERVICECODE, D.IMSI, B.COMPLETEDATE, 'DISABLE' DATA_STATUS "
+					+ "FROM SERVICE A, SERVICEORDER B, SERVICEPARAMVALUECHANGEORDER C, IMSI D "
+					+ "WHERE A.SERVICEID=B.SERVICEID AND B.ORDERID=C.ORDERID AND A.SERVICEID=D.SERVICEID "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "// -- QUERY ORDER START TIME "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"'  "// -- QUERY ORDER END TIME "
+					+ "  AND C.PARAMETERVALUEID=3749 "// --(PDP CONTEXT) "
+					+ "  AND C.NEWVALUE IS NULL "
+					+ sectionCondition
+					+ "UNION "
+					+ "SELECT A.SERVICEID, A.SERVICECODE, D.IMSI, B.COMPLETEDATE, 'ENABLE' DATA_STATUS "
+					+ "FROM SERVICE A, SERVICEORDER B, SERVICEPARAMVALUECHANGEORDER C, IMSI D "
+					+ "WHERE A.SERVICEID=B.SERVICEID AND B.ORDERID=C.ORDERID AND A.SERVICEID=D.SERVICEID "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "// -- QUERY ORDER START TIME "
+					+ "  AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"'  "// -- QUERY ORDER END TIME "
+					+ "  AND C.PARAMETERVALUEID=3749 "// --(PDP CONTEXT) "
+					+ "  AND C.OLDVALUE IS NULL "
+					+ sectionCondition
+					+ "  )ORDER BY COMPLETEDATE ";
+
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
 		
-		sql=
-				"SELECT SERVICEID,  MSISDN, IMSI,PRICEPLANID,ACTION,TIME "
-				+ "from( "
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID,TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,'D' ACTION "
-				+ "		FROM SERVICE A, IMSI B, TERMINATIONORDER C "
-				+ "		WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
-				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ sectionCondition
-				//+ "		AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) "
-				+ "        UNION"
-				+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID, TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS') TIME,'A' ACTION"
-				+ "				FROM SERVICE A, IMSI B "
-				+ "				WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
-				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
-				+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
-				+ sectionCondition
-				//+ "				AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%'  OR A.SERVICECODE like '8525392%' ) "
-				+ "        )"
-				+ "        ORDER BY TIME";
-	
-		try {
-			Statement st = conn2.createStatement();
-			logger.info("Search add and delete : "+sql);
-			ResultSet rs = st.executeQuery(sql);
-			while(rs.next()){
-				MSISDN=rs.getString("MSISDN");
-				IMSI=rs.getString("IMSI");
-				ACTION = rs.getString("ACTION");
-				
-				String pricePlanId = rs.getString("PRICEPLANID");
-				//20150702 cancel
-				//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
-				//因NTT 香港 160 不需限速，故拿掉
-				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
-					//20150409
-					//PLAN="1";
-					PLAN="3";
-				}else{
-					PLAN="2";
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn2.createStatement();
+				logger.info("Search gprsChange : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					String DATA_STATUS = rs.getString("DATA_STATUS");
+					if("ENABLE".equalsIgnoreCase(DATA_STATUS)) {
+						ACTION = "A";
+					}else {
+						ACTION = "D";
+					}
+					
+					PLAN = getPlan(IMSI,TIME);
+
+					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "GPRS");
+						postdatas.add(m);
+						//excutePost();
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't change Qos .");
+					}	
 				}
-				
-				if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
-					Map m = new HashMap();
-					m.put("MSISDN", MSISDN);
-					m.put("PLAN", PLAN);
-					m.put("ACTION", ACTION);
-					m.put("IMSI", IMSI);
-					m.put("TIME", rs.getString("TIME"));
-					postdatas.add(m);
-					//excutePost();
-				}else{
-					logger.error(" Because of MSISDN  or IMSI is null  , Can't delete Qos .");
+				return true;
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At gprs change occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
 				}
-				
-				
-				
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
 			}
-			st.close();
-			rs.close();
-		} catch (SQLException e) {
-			StringWriter s = new StringWriter();
-			e.printStackTrace(new PrintWriter(s));
-			errorMsg=s.toString();
-			logger.error("Got SQLException",e);
-			//sendMail
-			sendMail("At Cancel occure Exception("+new Date()+") \n"+s);
-			return false;
 		}
-		return true;
+		return false;
 	}
 	
-	private boolean changeQos(){
+	private boolean resetQos() {
+		logger.error("resetQos...");
+		
+		if(number_section!=null){
+			
+			
+			sql = "select A.IMSI,substr(A.MSISDN,4) MSISDN,TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS') TIME "
+					+ "from HUR_QOSRESET_LOG A "
+					+ "WHERE 1 = 1 "
+					//TEST SQL
+					//+ "AND (TYPE is null or TYPE = 'D_RESET') "
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "; //Query Order End Time
+			
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn.createStatement();
+				logger.info("Search resetQos : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					ACTION = "A";
+					//尋找目前的PLAN
+					PLAN = getPlan(IMSI, TIME);
+
+					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "RESET");
+						postdatas.add(m);
+						//excutePost();
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't addon Qos .");
+					}	
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At resetQos occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	private boolean newRegistedQos() {
+		logger.error("newRegistedQos...");
+		
+		if(number_section!=null){
+			
+			String sectionCondition = "" ;
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.SERVICECODE like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			
+			sql = "SELECT A.SERVICEID, A.SERVICECODE MSISDN, C.IMSI, TO_CHAR(B.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME "
+					+ "FROM SERVICE A, NEWSERVICEORDERPARAMETER B, IMSI C "
+					+ "WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.SERVICEID "
+					+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
+					+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " //Query Order End Time
+					+ "AND B.PARAMETERID=3749 " // -- Data Service (PDP) is Active "
+					+ sectionCondition;
+			
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn2.createStatement();
+				logger.info("Search newRegisted : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					ACTION = "A";
+					//找看看是不是預付卡
+					PLAN = getPrepayCardPlan(IMSI);
+
+					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "NEW");
+						postdatas.add(m);
+						//excutePost();
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't addon Qos .");
+					}	
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At newRegistedQos occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	//換號
+	private boolean changeQos() {
+		logger.error("changeQos...");
+		
+		if(number_section!=null){
+			
+			String sectionCondition = "" ;
+			String sectionCondition2 = "" ;
+			
+			sectionCondition += "AND ( 1=1 ";
+			sectionCondition2 += "AND ( 1=1 ";
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.PREVPHONENUMBER like '"+sections[i]+"%' ";
+				sectionCondition2 += "OR A.NEWPHONENUMBER like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			sectionCondition2 += ") ";
+			
+			
+			
+			sql = "SELECT B.SERVICEID, PREVPHONENUMBER, NEWPHONENUMBER, C.IMSI, TO_CHAR(A.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME " 
+					+ "FROM PHONENUMBERCHANGEORDER A, SERVICEORDER B, IMSI C " 
+					+ "WHERE A.ORDERID=B.ORDERID AND B.SERVICEID=C.SERVICEID " 
+					+ "AND A.PREVPHONENUMBER<>A.NEWPHONENUMBER " 
+					+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " 
+					+ "AND TO_CHAR(B.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " 
+					+ sectionCondition
+					+ sectionCondition2
+					+ "ORDER BY A.COMPLETEDATE " ;
+
+			
+			String IMSI,oMSISDN,nMSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn2.createStatement();
+				logger.info("Search changeQos : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					
+					oMSISDN=rs.getString("PREVPHONENUMBER");
+					nMSISDN=rs.getString("NEWPHONENUMBER");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					PLAN = getPlan(IMSI,TIME);
+
+					if(oMSISDN!=null && !"".equals(oMSISDN) && nMSISDN!=null && !"".equals(nMSISDN) && IMSI!=null && !"".equals(IMSI)){
+						//處理舊門號
+						Map m = new HashMap();
+						m.put("MSISDN", oMSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", "D");
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "CHANGE");
+						postdatas.add(m);
+						//處理新門號
+						m = new HashMap();
+						m.put("MSISDN", nMSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", "A");
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "CHANGE");
+						postdatas.add(m);
+
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't change Qos .");
+					}	
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At changeQos occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	
+	private boolean terminateQos() {
+		logger.error("terminateQos...");
+		
+		if(number_section!=null){
+			
+			String sectionCondition = "" ;
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR B.SERVICECODE like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			
+			sql = "SELECT B.SERVICEID, B.SERVICECODE MSISDN, C.IMSI,TO_CHAR(A.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME " 
+					+ "FROM TERMINATIONORDER A, SERVICE B, IMSI C " 
+					+ "WHERE A.TERMOBJID=B.SERVICEID AND A.ORDERTYPE=0 AND B.SERVICEID=C.SERVICEID(+) " 
+					+ "  AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " 
+					+ "  AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " 
+					+ sectionCondition
+					+ "ORDER BY A.COMPLETEDATE " ;
+					
+			
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn2.createStatement();
+				logger.info("Search terminateQos : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					
+					String serviceid = rs.getString("SERVICEID");
+					
+					if(IMSI ==null)
+						IMSI = getLastIMSI(serviceid);
+					if(IMSI ==null) {
+						sendMail("At terminate occure Exception("+new Date()+") \n"+"Can't find "+serviceid+"'s IMSI.");
+						continue;
+					}
+					
+					//確認是不是有數據狀態
+					boolean gprsOn = isGprsOn(serviceid);
+					
+					if(gprsOn) {
+						ACTION = "D";
+						//找看看是不是預付卡
+						PLAN = getPrepayCardPlan(IMSI);
+						//如果不是，確認是不是有加值服務
+						if("9".equalsIgnoreCase(PLAN)) {
+							PLAN = getPlan(IMSI,TIME);
+						}
+
+						if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+							Map m = new HashMap();
+							m.put("MSISDN", MSISDN);
+							m.put("PLAN", PLAN);
+							m.put("ACTION", ACTION);
+							m.put("IMSI", IMSI);
+							m.put("TIME", TIME);
+							m.put("TYPE", "TERMINATE");
+							postdatas.add(m);
+						}else{
+							logger.error(" Because of MSISDN  or IMSI is null  , Can't addon Qos .");
+						}
+					}		
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At aterminateQos Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	private boolean AddedQos() {
+		logger.error("AddedQos...");
+		
+		if(number_section!=null){
+			
+			String sectionCondition = "" ;
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.S2TMSISDN like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			
+			sql = 
+					"SELECT B.SERVICEID,A.S2TMSISDN MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
+					+ "FROM ADDONSERVICE A,IMSI B "
+					+ "WHERE A.S2TIMSI = B.IMSI "
+					+ "AND A.ADDONCODE IN ('SX001','SX002','SX004','SX005') "
+					+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+					+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+					+ sectionCondition
+					+ "ORDER BY A.REQUESTDATETIME ASC";
+					
+			
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn.createStatement();
+				logger.info("Search AddedQos : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					String ADDONACTION = rs.getString("ADDONACTION");
+					TIME = rs.getString("TIME");
+					String ADDONCODE = rs.getString("ADDONCODE");
+					String serviceid = rs.getString("SERVICEID");
+					boolean gprsOn = isGprsOn(serviceid);
+					if(gprsOn) {
+						ACTION = "A";
+						if("A".equalsIgnoreCase(ADDONACTION)) {
+							if("SX001".equals(ADDONCODE))
+								PLAN="5";
+							else 
+								if("SX002".equals(ADDONCODE))
+									PLAN="6";
+							else 
+								if("SX004".equals(ADDONCODE))
+									PLAN="10";
+							else 
+								if("SX005".equals(ADDONCODE))
+									PLAN="6";
+							else{
+								logger.error(" Because of ADDONCODE  is not correct  , skip this ("+MSISDN+","+ACTION+","+ADDONCODE+") .");
+								continue;
+							}
+								
+						}else if("D".equalsIgnoreCase(ADDONACTION)){
+							PLAN="9";
+						}else {
+							logger.error(" Because of ACTION  is not correct  , skip this ("+MSISDN+","+ACTION+","+ADDONCODE+") .");
+							continue;
+						}
+						
+						if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+							Map m = new HashMap();
+							m.put("MSISDN", MSISDN);
+							m.put("PLAN", PLAN);
+							m.put("ACTION", ACTION);
+							m.put("IMSI", IMSI);
+							m.put("TIME", TIME);
+							m.put("TYPE", "ADDED");
+							postdatas.add(m);
+						}else{
+							logger.error(" Because of MSISDN  or IMSI is null  , Can't addon Qos .");
+						}	
+					}
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At AddedQos occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	
+	
+/*	private boolean addAndDeleteQos(){
+		logger.error("Excute addAndDeleteQos Qos...");
+		
+		
+		if(number_section!=null){
+			
+			String sectionCondition = "" ;
+			
+			sectionCondition += "AND ( 1=1 ";
+			
+			String[] sections = number_section.trim().split(",");
+			
+			for(int i = 0;i<sections.length;i++){
+				sectionCondition += "OR A.SERVICECODE like '"+sections[i]+"%' ";
+			}
+			sectionCondition += ") ";
+			
+			
+			sql=
+					"SELECT SERVICEID,  MSISDN, IMSI,PRICEPLANID,ACTION,TIME "
+					+ "from( "
+					+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID,TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,'D' ACTION "
+					+ "		FROM SERVICE A, IMSI B, TERMINATIONORDER C "
+					+ "		WHERE A.SERVICEID=B.SERVICEID AND A.SERVICEID=C.TERMOBJID(+) "
+					+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+					+ "		AND TO_CHAR(C.COMPLETEDATE, 'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+					+ sectionCondition
+					//+ "		AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%' OR A.SERVICECODE like '8525392%'  ) "
+					+ "        UNION"
+					+ "        SELECT A.SERVICEID, SUBSTR(SERVICECODE,4) MSISDN, IMSI ,A.PRICEPLANID, TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS') TIME,'A' ACTION"
+					+ "				FROM SERVICE A, IMSI B "
+					+ "				WHERE A.SERVICEID=B.SERVICEID AND A.STATUS IN (1,3) "
+					+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+					+ "				AND TO_CHAR(A.DATEACTIVATED,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
+					+ sectionCondition
+					//+ "				AND (A.SERVICECODE like '8526640%' OR  A.SERVICECODE like '8525609%'  OR A.SERVICECODE like '8526947%'  OR A.SERVICECODE like '8525392%' ) "
+					+ "        )"
+					+ "        ORDER BY TIME";
+		
+			try {
+				Statement st = conn2.createStatement();
+				logger.info("Search add and delete : "+sql);
+				ResultSet rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					ACTION = rs.getString("ACTION");
+					
+					//20180112 add EXCEPTION of GO2PLAY
+					if(Long.parseLong(IMSI)>=Long.parseLong("454120290050007") && 
+							Long.parseLong(IMSI)<=Long.parseLong("454120290056506")) {
+						PLAN = "7";
+					}else //500門
+						if(Long.parseLong(IMSI)>=Long.parseLong("454120290056507") && 
+							Long.parseLong(IMSI)<=Long.parseLong("454120290057006")) {
+						PLAN = "5";
+					}else {
+						String pricePlanId = rs.getString("PRICEPLANID");
+						//20150702 cancel
+						//if("158".equals(pricePlanId)||"159".equals(pricePlanId)||"160".equals(pricePlanId)){
+						//因NTT 香港 160 不需限速，故拿掉
+						if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
+							//20150409
+							//PLAN="1";
+							//20180103
+							//PLAN="3";
+							PLAN="5";
+						}else{
+							//20180103
+							//PLAN="2";
+							PLAN="9";
+						}
+					}
+					
+					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", rs.getString("TIME"));
+						postdatas.add(m);
+						//excutePost();
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't delete Qos .");
+					}	
+				}
+				st.close();
+				rs.close();
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At Cancel occure Exception("+new Date()+") \n"+s);
+				return false;
+			}
+			return true;
+		}
+		return false;
+	}*/
+
+/*	private boolean changeQos(){
 		logger.error("Excute change Qos...");
 		
 		String sectionCondition = "" ;
@@ -783,27 +1589,37 @@ public class QosBatch extends  TimerTask implements Runnable {
 				IMSI=rs.getString("IMSI");
 				String pricePlanId = rs.getString("PRICEPLANID");
 				
-				String sql2 = "select case A.ServiceCode when 'SX001' then '3' when 'SX002' then '4' else '2' end PLAN "
+				//查詢原Plan
+				String sql2 = 
+						//20180103
+						//"select case A.ServiceCode when 'SX001' then '3' when 'SX002' then '4' else '2' end PLAN "
+						"select case A.ServiceCode "
+						+ "		when 'SX001' then '5' "
+						+ "		when 'SX002' then '6' "
+						//+ "		when 'SX003' then '9' "
+						+ "		when 'SX004' then '10' "
+						+ "		else '9' end PLAN "
 						+ "from Addonservice_N A "
 						+ "where A.S2TMSISDN like '%"+oMSISDN+"' "
+						+ "and A.ServiceCode IN ('SX001','SX002','SX004')"
 						+ "and A.STATUS = 'A' "
 						+ "and A.ENDDATE is null";
 				
 				
 				logger.info("query PLAN : "+sql2);
 				rs2 = st2.executeQuery(sql2);
-				
-				PLAN = "2";
-				
+				//20180103
+				//PLAN = "2";
+				PLAN = "9";
 				while(rs2.next()){
 					PLAN = rs2.getString("PLAN");
 				}
 				
-				/*if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
+				if("158".equals(pricePlanId)||"159".equals(pricePlanId)){
 					PLAN="3";
 				}else{
 					PLAN="2";
-				}*/
+				}
 				
 				if(oMSISDN!=null && !"".equals(oMSISDN) && nMSISDN!=null && !"".equals(nMSISDN) && IMSI!=null && !"".equals(IMSI)){
 					
@@ -857,8 +1673,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return false;
 		}
 		return true;
-	}
-	private boolean added(){
+	}*/
+/*	private boolean added(){
 		logger.error("Excute added Qos...");
 		
 		String sectionCondition = "" ;
@@ -876,7 +1692,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		sql = 
 				"SELECT SUBSTR(A.S2TMSISDN,4) MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
 				+ "FROM ADDONSERVICE A "
-				+ "WHERE A.ADDONCODE IN ('SX001','SX002') "
+				+ "WHERE A.ADDONCODE IN ('SX001','SX002','SX004') "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 				+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
 				//+ "AND (A.S2TMSISDN like '8526640%' OR  A.S2TMSISDN like '8525609%'  OR A.S2TMSISDN like '8526947%'   OR A.S2TMSISDN like '8525392%'  ) "
@@ -898,7 +1714,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 					
 					if("A".equals(ADDONACTION)){
 						//Delete old
-						PLAN="2";
+						//PLAN="2";
+						//20180103
+						PLAN="9";
 						ACTION="D";
 						//excutePost();
 						Map m = new HashMap();
@@ -910,8 +1728,13 @@ public class QosBatch extends  TimerTask implements Runnable {
 						postdatas.add(m);
 						
 						//Add new
-						if("SX001".equals(ADDONCODE))PLAN="3";
-						if("SX002".equals(ADDONCODE))PLAN="4";					
+						//if("SX001".equals(ADDONCODE))PLAN="3";
+						//if("SX002".equals(ADDONCODE))PLAN="4";		
+						//20180103
+						if("SX001".equals(ADDONCODE))PLAN="5";
+						if("SX002".equals(ADDONCODE))PLAN="6";
+						if("SX004".equals(ADDONCODE))PLAN="10";
+						
 						ACTION="A";
 						m = new HashMap();
 						m.put("MSISDN", MSISDN);
@@ -923,8 +1746,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 						//excutePost();	
 					}else if("D".equals(ADDONACTION)){
 						//Delete old
-						if("SX001".equals(ADDONCODE))PLAN="3";
-						if("SX002".equals(ADDONCODE))PLAN="4";	
+						//if("SX001".equals(ADDONCODE))PLAN="3";
+						//if("SX002".equals(ADDONCODE))PLAN="4";		
+						//20180103
+						if("SX001".equals(ADDONCODE))PLAN="5";
+						if("SX002".equals(ADDONCODE))PLAN="6";
+						if("SX004".equals(ADDONCODE))PLAN="10";
 						ACTION="D";
 						Map m = new HashMap();
 						m.put("MSISDN", MSISDN);
@@ -936,7 +1763,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 						//excutePost();
 						
 						//Add new
-						PLAN="2";
+						//PLAN="2";
+						//20180103
+						PLAN="9";
 						ACTION="A";
 						m = new HashMap();
 						m.put("MSISDN", MSISDN);
@@ -964,7 +1793,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return false;
 		}
 		return true;
-	}
+	}*/
 	/*
 	
 	private boolean addedQosA(){
@@ -1116,23 +1945,26 @@ public class QosBatch extends  TimerTask implements Runnable {
 			logger.info("Start QosBatch..."+Thread.currentThread().getName()+"\t"+nowTime);
 			startTime = nowTime.getTime();
 			
-			postdatas.clear();
-			if(setTime()&&addAndDeleteQos()&&changeQos()&&added()){
-				
-				if(postdatas.size()!=0){
-					logger.info("Sorting list with size "+postdatas.size());
-					List result = mergerSortList(0,postdatas.size()-1);
-					Iterator it = result.iterator();
+			
+			if(setTime()) {
+				postdatas.clear();
+				//20180313 add
+				resetQos();
+				logger.info("Post reset datas.");
+				executePost();
+	
+				postdatas.clear();
+				if(	newRegistedQos() &&//供裝
+						terminateQos() &&//退租
+						AddedQos() &&//加值服務
+						changeQos() &&//換號
+						gprsChangeQos()//開關數據
+						){
+					logger.info("Post datas.");
+					executePost();
 					
-					logger.info("Execute post... ");
-					while(it.hasNext()){
-						Map m = (Map) it.next();
-						//System.out.println(m.get("TIME")+":"+m.get("MSISDN")+":"+m.get("ACTION")+":"+m.get("PLAN"));
-						excutePost((String)m.get("MSISDN"),(String)m.get("IMSI"),(String)m.get("ACTION"),(String)m.get("PLAN"));
-					}
+					lastTime=nowTime;
 				}
-				
-				lastTime=nowTime;
 			}
 
 			// run end
@@ -1146,6 +1978,22 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		closeConnect();
 	}
+	
+	public void executePost() throws ParseException {
+		if(postdatas.size()!=0){
+			logger.info("Sorting list with size "+postdatas.size());
+			List result = mergerSortList(0,postdatas.size()-1);
+			Iterator it = result.iterator();
+			
+			logger.info("Execute post... ");
+			while(it.hasNext()){
+				Map m = (Map) it.next();
+				//System.out.println(m.get("TIME")+":"+m.get("MSISDN")+":"+m.get("ACTION")+":"+m.get("PLAN"));
+				excutePost((String)m.get("MSISDN"),(String)m.get("IMSI"),(String)m.get("ACTION"),(String)m.get("PLAN"),(String)m.get("TYPE"));
+			}
+		}
+	}
+	
 	
 	public static List  mergerSortList(int start,int end) throws ParseException{
 		List result = new ArrayList();
@@ -1178,35 +2026,5 @@ public class QosBatch extends  TimerTask implements Runnable {
 			}
 		}
 		return result;
-	}
-
-	public static void main(String[] args){
-		
-		/*if(args.length>0 && args[0].matches("^\\d+$")){
-			period_Time=Integer.parseInt(args[0]);
-			System.out.println("Has insert parameter time "+period_Time);
-		}*/
-		
-		loadProperties();
-		
-		if(args.length>0){
-			initialTime = args[0];
-		}else{
-			//initialTime = sdf.format(new Date());
-			initialTime = "20170221110000";
-		}
-		
-		//regularTimeRun();		
-		//20150420 測試新用法 timer 與 timerTask
-		Timer timer =new Timer();
-		timer.schedule(new QosBatch(),0, period_Time*60*1000);
-	}
-
-	public void run() {
-		try {
-			proccess();
-		} catch (ParseException e) {
-			e.printStackTrace();
-		}
 	}
 }
