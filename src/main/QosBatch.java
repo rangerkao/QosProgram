@@ -228,8 +228,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 		
 		nowTimeS = sdf.format(nowTime);
 		
-		if("000".equals(nowTimeS.substring(8,11))){
-			sendMail("Qos notification mail ("+new Date()+") \n","ranger.kao@sim2travel.com");
+		if("080".equals(nowTimeS.substring(8,11))||"170".equals(nowTimeS.substring(8,11))){
+			//if("000".equals(nowTimeS.substring(8,11))){
+			sendMail("Qos notification mail ("+new Date()+") \n","ranger.kao@sim2travel.com,yvonne.lin@sim2travel.com");
 		}
 		
 		
@@ -708,11 +709,9 @@ public class QosBatch extends  TimerTask implements Runnable {
 				+ "where 1 = 1 "  
 				+ "AND A.S2TIMSI = '"+IMSI+"' "  
 				+ "AND (A.STATUS = 'A' or (A.STATUS = 'D' and A.STARTDATE <= to_date('"+time+"','YYYYMMDDHH24MISS') and A.ENDDATE>= to_date('"+time+"','YYYYMMDDHH24MISS') )) "  
-				+ "AND A.SERVICECODE in ('SX001','SX002','SX004','SX005')"
+				+ "AND A.SERVICECODE in ('SX001','SX002','SX004','SX005','SX006','SX007')"
 				+ "order by A.STARTDATE DESC";
-		
-		
-		
+
 		Statement st = null;
 		ResultSet rs = null;
 		try {
@@ -796,6 +795,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 	
 	private String getPlan(String IMSI,String time) {
 		String addonCode = getAddonCode(IMSI,time);
+		
+		
 		if("SX001".equalsIgnoreCase(addonCode)) {
 			return "5";
 		}else if("SX002".equalsIgnoreCase(addonCode)) {
@@ -804,20 +805,69 @@ public class QosBatch extends  TimerTask implements Runnable {
 			return "10";
 		}else if("SX005".equalsIgnoreCase(addonCode)) {
 			return "6";
-		}else{
+		//20180718 add
+		//20180720  因美國包與華人上網包衝突暫不供裝PLAN
+		/*}else if("SX006".equalsIgnoreCase(addonCode)) {
+			return "10";*/
+		}else if("SX007".equalsIgnoreCase(addonCode)) {
+			return "9";
+		}else {
 			return "9";
 		}
 	}
 	
 	private String getPrepayCardPlan(String IMSI) {
+		
+		long IMSIL = Long.parseLong(IMSI);
+		
 		//20180117 add EXCEPTION of GO2PLAY
-		if(Long.parseLong(IMSI)>=Long.parseLong("454120290050007") && 
-				Long.parseLong(IMSI)<=Long.parseLong("454120290056506")) {
+		if(IMSIL>=454120290050007l && IMSIL<=454120290056506l) {
+		/*if(Long.parseLong(IMSI)>=Long.parseLong("454120290050007") && 
+				Long.parseLong(IMSI)<=Long.parseLong("454120290056506")) {*/
 			return "7";
-		}else //500門
-			if(Long.parseLong(IMSI)>=Long.parseLong("454120290056507") && 
-				Long.parseLong(IMSI)<=Long.parseLong("454120290057006")) {
+		}else //Go2Play 500門
+			if(IMSIL>= 454120290056507l && IMSIL<= 454120290057006l) {
 			return "5";
+			
+		}else //Go2Play 1000門
+			if(IMSIL>= 454120290066022l && IMSIL<= 454120290067021l) {
+			return "4";
+			
+		}else //Go2Play 1000門 8/15
+			if(IMSIL>= 454120290075022l && IMSIL<= 454120290076021l) {
+			return "4";
+		}else //Go2Play 1000門 10/01
+			if(IMSIL>= 454120290077022l && IMSIL<= 454120290078021l) {
+			return "4";
+		}else //Yunyobo 1 and 2 
+			if(
+				(454120290057007l<=IMSIL && IMSIL <= 454120290059001l)||
+				(454120290059007l<=IMSIL && IMSIL <= 454120290059011l)||
+				(454120290064022l<=IMSIL && IMSIL <= 454120290065021l)){
+			return "7";
+		}else //Yunyobo 3 4GB降速
+			if(
+				(454120290067022l<=IMSIL && IMSIL <= 454120290070021l)){
+			return "4";
+		}else //Yunyobo 20180710 add 前5002GB，後5004GB
+			if(
+				(454120290076022l<=IMSIL && IMSIL <= 454120290077021l)){
+			return "4";
+			
+		}else //Yunyobo 20181018 add 前1000門D-Yunyobo-C-07D-2GB，後1000門D-Yunyobo-C-15D-4GB
+			if(
+				(454120290083026l<=IMSIL && IMSIL <= 454120290084025l)||
+				(454120290084026l<=IMSIL && IMSIL <= 454120290085525l)){
+			return "4";
+				
+		}else //maoyun 
+			if(
+				(454120290065601l<=IMSIL && IMSIL <= 454120290065720l)){
+			return "2";
+		}else //FanTravel 20181008 
+			if(
+				(454120290078022l<=IMSIL && IMSIL <= 454120290080021l)){
+			return "2";
 		}else {
 			return "9";
 		}
@@ -940,6 +990,10 @@ public class QosBatch extends  TimerTask implements Runnable {
 					}
 					
 					PLAN = getPlan(IMSI,TIME);
+					
+					//20180727 add 先確認是不是供裝號，再確認是不是預付卡
+					if("9".equals(PLAN))
+						PLAN = getPrepayCardPlan(IMSI);
 
 					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
 						Map m = new HashMap();
@@ -980,19 +1034,110 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return false;
 	}
 	
+	private boolean changeQos() {
+		logger.error("changeQos...");
+		
+		if(number_section!=null){
+			sql = "select IMSI,MSISDN,PLAN,ACTION,TYPE "
+					+ "from HUR_QOSCHANGE_LOG A "
+					+ "where 1 = 1 "
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " //Query Order End Time
+					+ "";
+			
+			String IMSI,MSISDN,ACTION,PLAN,TIME;
+			
+			Statement st = null;
+			ResultSet rs = null;
+			
+			try {
+				st = conn.createStatement();
+				logger.info("Search resetQos : "+sql);
+				rs = st.executeQuery(sql);
+				while(rs.next()){
+					MSISDN=rs.getString("MSISDN");
+					IMSI=rs.getString("IMSI");
+					TIME = rs.getString("TIME");
+					ACTION = rs.getString("ACTION");
+					PLAN = rs.getString("PLAN");
+
+					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
+						Map m = new HashMap();
+						m.put("MSISDN", MSISDN);
+						m.put("PLAN", PLAN);
+						m.put("ACTION", ACTION);
+						m.put("IMSI", IMSI);
+						m.put("TIME", TIME);
+						m.put("TYPE", "RESET");
+						postdatas.add(m);
+						//excutePost();
+					}else{
+						logger.error(" Because of MSISDN  or IMSI is null  , Can't addon Qos .");
+					}	
+				}
+			} catch (SQLException e) {
+				StringWriter s = new StringWriter();
+				e.printStackTrace(new PrintWriter(s));
+				errorMsg=s.toString();
+				logger.error("Got SQLException",e);
+				//sendMail
+				sendMail("At resetQos occure Exception("+new Date()+") \n"+s);
+				return false;
+			}finally {
+				if(st!=null) {
+					try {
+						st.close();
+					} catch (SQLException e) {}
+				}
+				if(rs!=null) {
+					try {
+						rs.close();
+					} catch (SQLException e) {}
+				}	
+			}
+			return true;
+		}
+		return false;
+	}
+	
 	private boolean resetQos() {
 		logger.error("resetQos...");
 		
 		if(number_section!=null){
 			
 			
-			sql = "select A.IMSI,substr(A.MSISDN,4) MSISDN,TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS') TIME "
+/*			sql = "select A.IMSI,substr(A.MSISDN,4) MSISDN,TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS') TIME "
 					+ "from HUR_QOSRESET_LOG A "
 					+ "WHERE 1 = 1 "
 					//TEST SQL
 					//+ "AND (TYPE is null or TYPE = 'D_RESET') "
 					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
 					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "; //Query Order End Time
+			*/
+			
+			//20180802 add
+			/*sql = ""
+					+ "select A.IMSI,substr(A.MSISDN,4) MSISDN,TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS') TIME,B.PLAN "
+					+ "from HUR_QOSRESET_LOG A,(select A.IMSI,A.PLAN  "
+					+ "from QOS_PROVISION_LOG a , (select A.IMSI,MAX(A.PROVISIONID) pid  "
+					+ "from QOS_PROVISION_LOG A  "
+					+ "group by A.IMSI ) b  "
+					+ "where a.PROVISIONID = b.pid) B "
+					+ "where A.IMSI = B.IMSI "
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " //Query Order End Time
+					+ "";*/
+			
+			sql = "select A.IMSI,substr(A.MSISDN,4) MSISDN,TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS') TIME,B.PLAN "
+					+ "from HUR_QOSRESET_LOG A,(select A.MSISDN,A.PLAN "
+					+ "from QOS_PROVISION_LOG a , (select A.MSISDN,MAX(A.PROVISIONID) pid "
+					+ "from QOS_PROVISION_LOG A "
+					+ "group by A.MSISDN ) b  "
+					+ "where a.PROVISIONID = b.pid) B  "
+					+ "where A.MSISDN = '852'||B.MSISDN (+) "
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " //Query Order Start Time
+					+ "AND TO_CHAR(A.CREATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " //Query Order End Time
+					+ "";
 			
 			String IMSI,MSISDN,ACTION,PLAN,TIME;
 			
@@ -1009,7 +1154,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 					TIME = rs.getString("TIME");
 					ACTION = "A";
 					//尋找目前的PLAN
-					PLAN = getPlan(IMSI, TIME);
+					PLAN = rs.getString("PLAN");
+					//PLAN = getPlan(IMSI, TIME);
+					
+					//20180727 add 先確認是不是供裝號，再確認是不是預付卡
+					/*if("9".equals(PLAN))
+						PLAN = getPrepayCardPlan(IMSI);*/
 
 					if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
 						Map m = new HashMap();
@@ -1130,8 +1280,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return false;
 	}
 	//換號
-	private boolean changeQos() {
-		logger.error("changeQos...");
+	private boolean GPRSchange() {
+		logger.error("GPRSchange...");
 		
 		if(number_section!=null){
 			
@@ -1169,7 +1319,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 			
 			try {
 				st = conn2.createStatement();
-				logger.info("Search changeQos : "+sql);
+				logger.info("Search GPRSchange : "+sql);
 				rs = st.executeQuery(sql);
 				while(rs.next()){
 					
@@ -1177,6 +1327,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 					nMSISDN=rs.getString("NEWPHONENUMBER");
 					IMSI=rs.getString("IMSI");
 					TIME = rs.getString("TIME");
+					
+					
 					PLAN = getPlan(IMSI,TIME);
 
 					if(oMSISDN!=null && !"".equals(oMSISDN) && nMSISDN!=null && !"".equals(nMSISDN) && IMSI!=null && !"".equals(IMSI)){
@@ -1209,7 +1361,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				errorMsg=s.toString();
 				logger.error("Got SQLException",e);
 				//sendMail
-				sendMail("At changeQos occure Exception("+new Date()+") \n"+s);
+				sendMail("At GPRSchange occure Exception("+new Date()+") \n"+s);
 				return false;
 			}finally {
 				if(st!=null) {
@@ -1245,14 +1397,27 @@ public class QosBatch extends  TimerTask implements Runnable {
 			}
 			sectionCondition += ") ";
 			
-			sql = "SELECT B.SERVICEID, B.SERVICECODE MSISDN, C.IMSI,TO_CHAR(A.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME " 
+			/*sql = "SELECT B.SERVICEID, B.SERVICECODE MSISDN, C.IMSI,TO_CHAR(A.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME " 
 					+ "FROM TERMINATIONORDER A, SERVICE B, IMSI C " 
 					+ "WHERE A.TERMOBJID=B.SERVICEID AND A.ORDERTYPE=0 AND B.SERVICEID=C.SERVICEID(+) " 
 					+ "  AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' " 
 					+ "  AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' " 
 					+ sectionCondition
-					+ "ORDER BY A.COMPLETEDATE " ;
+					+ "ORDER BY A.COMPLETEDATE " ;*/
 					
+			//20180702 add
+			sql = "SELECT B.SERVICEID, B.SERVICECODE MSISDN, C.IMSI,TO_CHAR(A.COMPLETEDATE, 'YYYYMMDDHH24MISS') TIME,d.PLAN "
+					+ "FROM TERMINATIONORDER A, SERVICE B, IMSI C ,(select A.IMSI,A.PLAN "
+					+ "from QOS_PROVISION_LOG a , (select A.IMSI,MAX(A.PROVISIONID) pid "
+					+ "from QOS_PROVISION_LOG A "
+					+ "group by A.IMSI ) b "
+					+ "where a.PROVISIONID = b.pid "
+					+ "and a.CERATE_TIME >= to_Date('20180501','yyyyMMdd') ) d "
+					+ "WHERE A.TERMOBJID=B.SERVICEID AND A.ORDERTYPE=0 AND B.SERVICEID=C.SERVICEID(+) AND c.imsi = d.imsi "
+					+ "AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
+					+ "AND TO_CHAR(A.COMPLETEDATE,'YYYYMMDDHH24MISS')<'"+preTimeS+"' "
+					+ sectionCondition
+					+ "ORDER BY A.COMPLETEDATE " ;
 			
 			String IMSI,MSISDN,ACTION,PLAN,TIME;
 			
@@ -1260,13 +1425,15 @@ public class QosBatch extends  TimerTask implements Runnable {
 			ResultSet rs = null;
 			
 			try {
-				st = conn2.createStatement();
+				st = conn.createStatement();
 				logger.info("Search terminateQos : "+sql);
 				rs = st.executeQuery(sql);
 				while(rs.next()){
 					MSISDN=rs.getString("MSISDN");
 					IMSI=rs.getString("IMSI");
 					TIME = rs.getString("TIME");
+					//20180702 修改以最後供裝的PLAN做D
+					PLAN = rs.getString("PLAN");
 					
 					String serviceid = rs.getString("SERVICEID");
 					
@@ -1282,12 +1449,12 @@ public class QosBatch extends  TimerTask implements Runnable {
 					
 					if(gprsOn) {
 						ACTION = "D";
-						//找看看是不是預付卡
+					/*	//找看看是不是預付卡
 						PLAN = getPrepayCardPlan(IMSI);
 						//如果不是，確認是不是有加值服務
 						if("9".equalsIgnoreCase(PLAN)) {
 							PLAN = getPlan(IMSI,TIME);
-						}
+						}*/
 
 						if(MSISDN!=null && !"".equals(MSISDN) && IMSI!=null && !"".equals(IMSI)){
 							Map m = new HashMap();
@@ -1348,7 +1515,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 					"SELECT B.SERVICEID,A.S2TMSISDN MSISDN, A.S2TIMSI IMSI,A.ADDONCODE,A.ADDONACTION,TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS') TIME "
 					+ "FROM ADDONSERVICE A,IMSI B "
 					+ "WHERE A.S2TIMSI = B.IMSI "
-					+ "AND A.ADDONCODE IN ('SX001','SX002','SX004','SX005') "
+					+ "AND A.ADDONCODE IN ('SX001','SX002','SX004','SX005','SX006') "
 					+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')>='"+preTimeS+"' "
 					+ "AND TO_CHAR(A.REQUESTDATETIME,'YYYYMMDDHH24MISS')<'"+nowTimeS+"' "
 					+ sectionCondition
@@ -1386,13 +1553,27 @@ public class QosBatch extends  TimerTask implements Runnable {
 							else 
 								if("SX005".equals(ADDONCODE))
 									PLAN="6";
+							//20180718 add
+							//20180720  因美國包與華人上網包衝突暫不供裝PLAN
+							/*else 
+								if("SX006".equals(ADDONCODE))
+									PLAN="10";*/
+							
 							else{
 								logger.error(" Because of ADDONCODE  is not correct  , skip this ("+MSISDN+","+ACTION+","+ADDONCODE+") .");
 								continue;
 							}
 								
 						}else if("D".equalsIgnoreCase(ADDONACTION)){
+							//20180926 add
+							//因為改變plan有先新增新plan再刪就plan的情況，所以在刪除時判斷是不是有新的plan存在
+							String plan = getPlan(IMSI, sdf.format(new Date()));
+							if(!"9".equals(plan)) 
+								continue;
+								
 							PLAN="9";
+						
+								
 						}else {
 							logger.error(" Because of ACTION  is not correct  , skip this ("+MSISDN+","+ACTION+","+ADDONCODE+") .");
 							continue;
@@ -1541,7 +1722,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 		return false;
 	}*/
 
-/*	private boolean changeQos(){
+/*	private boolean GPRSchange(){
 		logger.error("Excute change Qos...");
 		
 		String sectionCondition = "" ;
@@ -1948,6 +2129,8 @@ public class QosBatch extends  TimerTask implements Runnable {
 			
 			if(setTime()) {
 				postdatas.clear();
+				//20181022 add
+				changeQos();
 				//20180313 add
 				resetQos();
 				logger.info("Post reset datas.");
@@ -1957,7 +2140,7 @@ public class QosBatch extends  TimerTask implements Runnable {
 				if(	newRegistedQos() &&//供裝
 						terminateQos() &&//退租
 						AddedQos() &&//加值服務
-						changeQos() &&//換號
+						GPRSchange() &&//換號
 						gprsChangeQos()//開關數據
 						){
 					logger.info("Post datas.");

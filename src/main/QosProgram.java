@@ -250,7 +250,7 @@ public class QosProgram {
 				"from ADDONSERVICE_N " + 
 				"where S2TMSISDN like '%"+msisdn+"' " + 
 				"and ENDDATE is null " +
-				"and ServiceCode IN ('SX001','SX002','SX004')" ;
+				"and ServiceCode IN ('SX001','SX002','SX004','SX006')" ;
 		
 		String serviceCode = null;
 		Statement st = null;
@@ -282,6 +282,12 @@ public class QosProgram {
 				if("SX004".equalsIgnoreCase(serviceCode)) {
 				return "10";
 			}
+			//20180718
+			//20180720  因與華人上網包衝突暫不供裝PLAN
+			/*else //多國流量包
+				if("SX006".equalsIgnoreCase(serviceCode)) {
+				return "10";
+			}*/
 			
 
 		} catch (SQLException e) {
