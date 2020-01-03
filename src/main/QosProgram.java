@@ -773,6 +773,8 @@ public class QosProgram {
 	
 	 private  static String excutePost(String VERSION,String MSISDN,String IMSI,String dayTime,String VENDOR,String ACTION,String PLAN){
 		String url=	"http://"+IP+"/mvno_api/MVNO_UPDATE_QOS";
+		//8月改版
+		//String url=	"http://"+IP+"/mvnoapi/MVNO_UPDATE_QOS";
 		String param="VERSION="+VERSION+"&MSISDN="+MSISDN+"&IMSI="+IMSI+"&DATE_TIME="+dayTime+"&VENDOR="+VENDOR+"&ACTION="+ACTION+"&PLAN="+PLAN+"";
 		String result=null;
 		
